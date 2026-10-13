@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Site Watch - Administrator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+```
+<!-- Sidebar -->
+<div class="side">
+    <div class="logo">TAKE NOTE</div>
+    <div class="tag">SITE WATCH</div>
+
+    <a class="nav on" href="#">Dashboard</a>
+    <a class="nav" href="#">User management</a>
+    <a class="nav" href="#">Role management</a>
+    <a class="nav" href="#">Site management</a>
+    <a class="nav" href="#">Site assignments</a>
+
+    <a class="nav" href="#">
+        Leave requests
+        <span class="badge" id="leaveBadge">1</span>
+    </a>
+
+    <a class="nav" href="#">Activity history</a>
+
+    <div class="user">
+        <b>Admin</b><br>
+        Administrator<br>
+        <a href="index.html" onclick="signOut()">Sign out</a>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+
+    <!-- Top Section -->
+    <div class="top">
+        <div>
+            <h1>Company overview</h1>
+            <span class="small">All sites · Wednesday 7 October</span>
+        </div>
+
+        <div>
+            <button class="btn outline">New site</button>
+            <button class="btn">Register employee</button>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats">
+
+        <div class="stat">
+            <b>50</b>
+            Total employees
+        </div>
+
+        <div class="stat">
+            <b class="green">43</b>
+            Checked in
+        </div>
+
+        <div class="stat">
+            <b>7</b>
+            Absent
+        </div>
+
+        <div class="stat">
+            <b style="color:#9a1b1b">3</b>
+            Outside site
+        </div>
+
+        <div class="stat">
+            <b style="color:#1e4fa0">4</b>
+            On leave
+        </div>
+
+        <div class="stat">
+            <b style="color:#9a1b1b">5</b>
+            Open incidents
+        </div>
+
+    </div>
+
+    <!-- Sites and Site Rules -->
+    <div class="grid2" style="grid-template-columns:1.2fr 1fr">
+
+        <!-- Sites -->
+        <div class="card">
+            <h2>Sites</h2>
+
+            <table>
+                <tr>
+                    <th>Site</th>
+                    <th>Manager</th>
+                    <th>Staff</th>
+                    <th>Radius</th>
+                </tr>
+
+                <tr>
+                    <td><b>Company Headquarters</b></td>
+                    <td>Nomsa Zulu</td>
+                    <td>24</td>
+                    <td>200 m</td>
+                </tr>
+
+                <tr>
+                    <td><b>Warehouse B</b></td>
+                    <td>Peter van Wyk</td>
+                    <td>15</td>
+                    <td>150 m</td>
+                </tr>
+
+                <tr>
+                    <td><b>North Depot</b></td>
+                    <td>Aisha Patel</td>
+                    <td>11</td>
+                    <td>150 m</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Site Rules -->
+        <div class="card">
+
+            <h2>
+                Site rules
+                <span class="small">Company Headquarters</span>
+            </h2>
+
+            <label>
+                Site radius:
+                <span id="radiusText">200</span> m
+            </label>
+
+            <input
+                type="range"
+                min="50"
+                max="500"
+                value="200"
+                oninput="updateRadius(this.value)"
+            >
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+
+                <div>
+                    <label>Work starts</label>
+                    <input type="time" value="08:00">
+                </div>
+
+                <div>
+                    <label>Work ends</label>
+                    <input type="time" value="17:00">
+                </div>
+
+            </div>
+
+            <label>Authorised network</label>
+
+            <input value="Company Wi-Fi">
+
+            <p class="small" style="margin:8px 0 14px">
+                Location is monitored only between the start and end times above.
+            </p>
+
+            <button class="btn" onclick="saveSiteRules()">
+                Save site rules
+            </button>
+
+        </div>
+    </div>
+
+    <!-- Leave and Activity -->
+    <div class="grid2" style="grid-template-columns:1fr 1.2fr">
+
+        <!-- Leave Requests -->
+        <div class="card">
+
+            <h2>Leave awaiting approval</h2>
+
+            <div
+                id="leaveBox"
+                style="border:1px solid #e3e0e0;border-radius:10px;padding:14px"
+            >
+                <b>Thabo Mokoena</b>
+
+                <span
+                    class="pill amber"
+                    id="leaveStatus"
+                    style="float:right"
+                >
+                    Pending
+                </span>
+
+                <br>
+
+                <span class="small">
+                    Sick leave · 03/10 to 04/10 · 2 days
+                </span>
+
+                <p style="margin:8px 0">
+                    Reason: flu symptoms
+                </p>
+
+                <a href="#">
+                    View sick note (sick-note-thabo.pdf)
+                </a>
+
+                <br><br>
+
+                <button
+                    class="btn"
+                    onclick="decide('Approved','green')"
+                >
+                    Approve
+                </button>
+
+                <button
+                    class="btn outline"
+                    onclick="decide('Rejected','red')"
+                >
+                    Reject
+                </button>
+            </div>
+
+            <p class="small" style="margin-top:10px">
+                Balance after approval: 5 of 10 sick days left
+            </p>
+
+        </div>
+
+        <!-- Activity History -->
+        <div class="card">
+
+            <h2>Activity history</h2>
+
+            <table id="log">
+
+                <tr>
+                    <th>Time</th>
+                    <th>User</th>
+                    <th>Action</th>
+                </tr>
+
+                <tr>
+                    <td>10:05</td>
+                    <td>Nomsa Zulu</td>
+                    <td>Updated incident INC-014 to Investigating</td>
+                </tr>
+
+                <tr>
+                    <td>09:42</td>
+                    <td>Sipho Nkosi</td>
+                    <td>Reported incident INC-014</td>
+                </tr>
+
+                <tr>
+                    <td>08:27</td>
+                    <td>Maria Santos</td>
+                    <td>Checked in at Company Headquarters</td>
+                </tr>
+
+                <tr>
+                    <td>08:10</td>
+                    <td>Admin</td>
+                    <td>Updated site radius for Company Headquarters</td>
+                </tr>
+
+                <tr>
+                    <td>07:55</td>
+                    <td>Thabo Mokoena</td>
+                    <td>Checked in at Company Headquarters</td>
+                </tr>
+
+            </table>
+
+        </div>
+    </div>
+
+    <!-- Users and Roles -->
+    <div class="card">
+
+        <h2>Users and roles</h2>
+
+        <table>
+
+            <tr>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Site</th>
+                <th>Account</th>
+            </tr>
+
+            <tr>
+                <td><b>Nomsa Zulu</b></td>
+                <td>
+                    <span class="pill blue">Site Manager</span>
+                </td>
+                <td>Company Headquarters</td>
+                <td>Active</td>
+            </tr>
+
+            <tr>
+                <td><b>Thabo Mokoena</b></td>
+                <td>
+                    <span class="pill grey">Employee</span>
+                </td>
+                <td>Company Headquarters</td>
+                <td>Active</td>
+            </tr>
+
+            <tr>
+                <td><b>Peter van Wyk</b></td>
+                <td>
+                    <span class="pill blue">Site Manager</span>
+                </td>
+                <td>Warehouse B</td>
+                <td>Active</td>
+            </tr>
+
+            <tr>
+                <td><b>John Dlamini</b></td>
+                <td>
+                    <span class="pill grey">Employee</span>
+                </td>
+                <td>Company Headquarters</td>
+                <td>Active</td>
+            </tr>
+
+        </table>
+
+    </div>
+</div>
+```
+
+</div>
+
+<script>
+// Check the user's role before showing the administrator page
+var userRole = sessionStorage.getItem("siteWatchRole");
+
+if(userRole !== "admin"){
+    if(userRole === "employee"){
+        window.location.href = "employee.html";
+    }else if(userRole === "manager"){
+        window.location.href = "manager.html";
+    }else{
+        window.location.href = "index.html";
+    }
+}
+
+// Sign out
+function signOut(){
+    sessionStorage.removeItem("siteWatchRole");
+}
+
+// Update the site radius
+function updateRadius(value){
+    document.getElementById("radiusText").textContent = value;
+}
+
+// Save the site rules
+function saveSiteRules(){
+    alert("Site rules saved (demo)");
+}
+
+// Approve or reject the leave request
+function decide(status, colour){
+    var leaveStatus = document.getElementById("leaveStatus");
+
+    leaveStatus.textContent = status;
+    leaveStatus.className = "pill " + colour;
+
+    document.getElementById("leaveBadge").textContent = "0";
+}
+</script>
+
+</body>
+</html>

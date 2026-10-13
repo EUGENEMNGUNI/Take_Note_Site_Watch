@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Site Watch - Site Manager</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+    <!-- Sidebar -->
+    <div class="side">
+        <div class="logo">TAKE NOTE</div>
+        <div class="tag">SITE WATCH</div>
+        <a class="nav on" href="#" data-page="dashboard">Dashboard</a>
+        <a class="nav" href="#">Employees</a>
+        <a class="nav" href="#">Check-ins log</a>
+        <a class="nav" href="#" data-page="tasks">Tasks <span class="badge">9</span></a>
+        <a class="nav" href="#" data-page="incidents">Incidents <span class="badge" style="background:#fadcdc;color:#9a1b1b">3</span></a>
+        <a class="nav" href="#">Messages</a>
+        <div class="user">
+            <b>Nomsa Zulu</b><br>
+            Site Manager<br>
+            <a href="index.html">Sign out</a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main">
+        <!-- Dashboard -->
+        <div id="dashboard" class="page">
+            <div class="top">
+                <div>
+                    <h1>Company Headquarters</h1>
+                    <span class="small">Wednesday 7 October · 10:13</span>
+                </div>
+                <div>
+                    <span class="pill green">Monitoring on · ends 17:00</span>
+                    &nbsp;
+                    <button class="btn" onclick="showPage('tasks')">New task</button>
+                </div>
+            </div>
+
+            <div class="stats">
+                <div class="stat"><b>24</b>Assigned staff</div>
+                <div class="stat"><b class="green">21</b>Checked in</div>
+                <div class="stat"><b style="color:#9a1b1b">2</b>Outside site</div>
+                <div class="stat"><b style="color:var(--amber)">2</b>Late today</div>
+                <div class="stat"><b>9</b>Open tasks</div>
+                <div class="stat"><b style="color:#9a1b1b">3</b>Open incidents</div>
+            </div>
+
+            <div class="grid2">
+                <!-- Live Site Map -->
+                <div class="card">
+                    <h2>Live site map</h2>
+                    <div class="map">
+                        <div class="zone"></div>
+                        <div class="hq">HQ building</div>
+                        <div class="dot" style="background:#157a45;left:40%;top:30%"></div>
+                        <div class="dot" style="background:#157a45;left:58%;top:38%"></div>
+                        <div class="dot" style="background:#157a45;left:44%;top:72%"></div>
+                        <div class="dot" style="background:#157a45;left:55%;top:78%"></div>
+                        <div class="dot" style="background:#e08a00;left:66%;top:56%"></div>
+                        <div class="dot" style="background:#9a1b1b;left:8%;top:12%"></div>
+                        <div class="dot" style="background:#9a1b1b;left:88%;top:86%"></div>
+                        <div class="dot" style="background:#16171b;left:48%;top:18%;border-radius:2px;transform:rotate(45deg)"></div>
+                    </div>
+                    <p class="small" style="margin-top:8px">Site radius 200 m · Green: within site · Orange: near boundary · Red: outside site · Black: open incident</p>
+                </div>
+
+                <!-- Alerts -->
+                <div class="card">
+                    <h2>Alerts <span class="small">5 new</span></h2>
+                    <table>
+                        <tr>
+                            <td>
+                                <b>Thabo Mokoena is outside the site radius</b><br>
+                                <span class="small">11:00 · 340 m from centre</span>
+                            </td>
+                            <td><a href="#">Message</a></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <b>High priority incident: water leak, Bay 3</b><br>
+                                <span class="small">09:42 · Sipho Nkosi</span>
+                            </td>
+                            <td><a href="#" onclick="showPage('incidents')">Open</a></td>
+                        </tr>
+                        <tr>
+                            <td><b>Late check-in: Maria Santos at 08:27</b></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <b>John Dlamini has not checked in today</b><br>
+                                <span class="small">Shift started 08:00</span>
+                            </td>
+                            <td><a href="#">Call</a></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <b>New sick-leave request from Thabo Mokoena</b><br>
+                                <span class="small">Sent to administrator</span>
+                            </td>
+                            <td></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Latest Check-ins -->
+            <div class="card">
+                <h2>Latest check-ins</h2>
+                <table>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Checked in</th>
+                        <th>Site</th>
+                        <th>Presence</th>
+                        <th>Open tasks</th>
+                    </tr>
+                    <tr>
+                        <td><b>Thabo Mokoena</b></td>
+                        <td>07:55</td>
+                        <td>Company Headquarters</td>
+                        <td><span class="pill red">Outside site</span></td>
+                        <td>1</td>
+                    </tr>
+                    <tr>
+                        <td><b>Maria Santos</b></td>
+                        <td>08:27</td>
+                        <td>Company Headquarters</td>
+                        <td><span class="pill green">Within site</span></td>
+                        <td>2</td>
+                    </tr>
+                    <tr>
+                        <td><b>Lerato Khumalo</b></td>
+                        <td>07:48</td>
+                        <td>Company Headquarters</td>
+                        <td><span class="pill amber">Near boundary</span></td>
+                        <td>1</td>
+                    </tr>
+                    <tr>
+                        <td><b>Sipho Nkosi</b></td>
+                        <td>07:51</td>
+                        <td>Company Headquarters</td>
+                        <td><span class="pill red">Outside site</span></td>
+                        <td>2</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tasks -->
+        <div id="tasks" class="page hide">
+            <h1>Tasks</h1>
+            <p class="small" style="margin-bottom:16px">Company Headquarters · 9 open, 2 completed today</p>
+
+            <div class="card" style="margin-bottom:18px">
+                <h2>Create and assign a task</h2>
+                <div class="form4">
+                    <div>
+                        <label>Task</label>
+                        <input id="taskName" placeholder="e.g. Inspect server room">
+                    </div>
+                    <div>
+                        <label>Assign to</label>
+                        <select id="taskWho">
+                            <option>Thabo Mokoena</option>
+                            <option>Maria Santos</option>
+                            <option>Lerato Khumalo</option>
+                            <option>Sipho Nkosi</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Priority</label>
+                        <select id="taskPri">
+                            <option>High</option>
+                            <option>Medium</option>
+                            <option>Low</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Due</label>
+                        <input id="taskDue" type="time" value="14:00">
+                    </div>
+                </div>
+                <br>
+                <button class="btn" onclick="addTask()">Assign task</button>
+            </div>
+
+            <div class="cols">
+                <!-- Pending -->
+                <div class="col">
+                    <h2>Pending</h2>
+                    <div id="pending">
+                        <div class="task">
+                            <b>Inspect server room</b>
+                            <span class="pill red" style="float:right">High</span><br>
+                            <span class="small">Thabo Mokoena · Due 14:00</span><br>
+                            <span class="pill blue">Linked to INC-013</span>
+                        </div>
+                        <div class="task">
+                            <b>Restock first-aid kits</b>
+                            <span class="pill amber" style="float:right">Medium</span><br>
+                            <span class="small">Maria Santos · Due 16:00</span>
+                        </div>
+                        <div class="task">
+                            <b>Check fire-exit signage</b>
+                            <span class="pill grey" style="float:right">Low</span><br>
+                            <span class="small">Lerato Khumalo · Due 17:00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- In Progress -->
+                <div class="col">
+                    <h2>In progress</h2>
+                    <div class="task">
+                        <b>Cordon off and mop Bay 3</b>
+                        <span class="pill red" style="float:right">High</span><br>
+                        <span class="small">Sipho Nkosi · Due 11:30</span><br>
+                        <span class="pill blue">Linked to INC-014</span>
+                    </div>
+                    <div class="task">
+                        <b>Check extinguisher tags, Bay 1</b>
+                        <span class="pill amber" style="float:right">Medium</span><br>
+                        <span class="small">Thabo Mokoena · Due 15:30</span>
+                    </div>
+                </div>
+
+                <!-- Completed -->
+                <div class="col">
+                    <h2>Completed</h2>
+                    <div class="task done">
+                        <b>Morning equipment check</b>
+                        <span class="pill green" style="float:right">Done</span><br>
+                        <span class="small">Thabo Mokoena · 09:10</span>
+                    </div>
+                    <div class="task done">
+                        <b>Clear loading dock</b>
+                        <span class="pill green" style="float:right">Done</span><br>
+                        <span class="small">Sipho Nkosi · 09:35</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Incidents -->
+        <div id="incidents" class="page hide">
+            <h1>Incidents</h1>
+            <p class="small" style="margin-bottom:16px">Company Headquarters · 3 open, 1 resolved this week</p>
+            <div style="display:grid;grid-template-columns:1fr 1.3fr;gap:18px">
+                <div id="incList"></div>
+                <div class="card" id="incDetail"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Switch between Dashboard, Tasks and Incidents
+function showPage(name){
+    var pages = document.querySelectorAll(".page");
+    for(var i = 0; i < pages.length; i++){
+        pages[i].classList.add("hide");
+    }
+    document.getElementById(name).classList.remove("hide");
+    var links = document.querySelectorAll(".nav");
+    for(var j = 0; j < links.length; j++){
+        if(links[j].dataset.page === name){
+            links[j].classList.add("on");
+        }else{
+            links[j].classList.remove("on");
+        }
+    }
+}
+
+// Make the sidebar navigation work
+var navs = document.querySelectorAll(".nav[data-page]");
+for(var k = 0; k < navs.length; k++){
+    navs[k].onclick = function(event){
+        event.preventDefault();
+        showPage(this.dataset.page);
+    };
+}
+
+// Add a new task to the Pending column
+function addTask(){
+    var taskName = document.getElementById("taskName").value;
+    if(taskName === ""){
+        alert("Please type a task name");
+        return;
+    }
+    var priority = document.getElementById("taskPri").value;
+    var priorityColour;
+    if(priority === "High"){
+        priorityColour = "red";
+    }else if(priority === "Medium"){
+        priorityColour = "amber";
+    }else{
+        priorityColour = "grey";
+    }
+    var employee = document.getElementById("taskWho").value;
+    var dueTime = document.getElementById("taskDue").value;
+    var task = document.createElement("div");
+    task.className = "task";
+    task.innerHTML = "<b>" + taskName + "</b>" +
+        " <span class=\"pill " + priorityColour + "\" style=\"float:right\">" +
+        priority + "</span><br>" +
+        "<span class=\"small\">" + employee + " · Due " + dueTime + "</span>";
+    document.getElementById("pending").appendChild(task);
+    document.getElementById("taskName").value = "";
+}
+
+// Incident information
+var incidents = [
+    {
+        id:"INC-014",
+        title:"Water leak near Bay 3",
+        priority:"High",
+        colour:"red",
+        step:2,
+        person:"Sipho Nkosi",
+        time:"09:42 today",
+        location:"Bay 3, Company Headquarters",
+        description:"A pipe joint above the loading bay is dripping onto the floor. The area is slippery and close to the forklift route.",
+        log:[
+            "10:05 Nomsa Zulu set status to Investigating",
+            "09:42 Sipho Nkosi reported the incident"
+        ]
+    },
+    {
+        id:"INC-013",
+        title:"Exposed cable, server room",
+        priority:"Medium",
+        colour:"amber",
+        step:1,
+        person:"Thabo Mokoena",
+        time:"08:20 today",
+        location:"Server room, Company Headquarters",
+        description:"A cable is hanging out of the ceiling panel above the server racks.",
+        log:[
+            "08:20 Thabo Mokoena reported the incident"
+        ]
+    },
+    {
+        id:"INC-012",
+        title:"Slip hazard at entrance",
+        priority:"Low",
+        colour:"grey",
+        step:3,
+        person:"Maria Santos",
+        time:"Monday",
+        location:"Main entrance, Company Headquarters",
+        description:"The mat at the entrance keeps curling up.",
+        log:[
+            "Monday Maria Santos reported the incident"
+        ]
+    }
+];
+
+// Incident status names
+var steps = [
+    "Reported",
+    "Investigating",
+    "Resolved"
+];
+
+// Create the incident status bar
+function stepBar(number){
+    var html = "";
+    for(var i = 0; i < 3; i++){
+        if(i < number){
+            html += '<span class="pill red" style="margin-right:6px;padding:6px 14px;background:var(--red);color:#fff">' +
+                steps[i] +
+                '</span>';
+        }else{
+            html += '<span class="pill grey" style="margin-right:6px;padding:6px 14px">' +
+                steps[i] +
+                '</span>';
+        }
+    }
+    return html;
+}
+
+// Display an incident
+function showIncident(number){
+    var incident = incidents[number];
+    var list = "";
+    for(var i = 0; i < incidents.length; i++){
+        var item = incidents[i];
+        var selected = "";
+        if(i === number){
+            selected = "sel";
+        }
+        list += '<div class="inc ' + selected + '" onclick="showIncident(' + i + ')">' +
+            '<span class="small">' + item.id + ' · Hazard</span> ' +
+            '<span class="pill ' + item.colour + '" style="float:right">' + item.priority + '</span><br>' +
+            '<b>' + item.title + '</b><br>' +
+            '<div style="margin:8px 0">' + stepBar(item.step) + '</div>' +
+            '<span class="small">' + item.person + ' · ' + item.time + '</span>' +
+            '</div>';
+    }
+    document.getElementById("incList").innerHTML = list;
+    document.getElementById("incDetail").innerHTML =
+        '<span class="small">' + incident.id + ' · Hazard</span>' +
+        '<h1>' + incident.title + '</h1>' +
+        '<p style="margin:10px 0">' + incident.description + '</p>' +
+        '<p class="small">Reported by <b>' + incident.person + '</b> · Location: <b>' +
+        incident.location + '</b> · Priority: <b>' + incident.priority + '</b></p>' +
+        '<div class="map" style="height:120px;margin:14px 0">' +
+        '<div class="zone" style="width:120px;height:120px;margin:-60px 0 0 -60px"></div>' +
+        '</div>' +
+        '<h2>Activity</h2>' +
+        '<p class="small" style="line-height:1.8">' +
+        incident.log.join("<br>") +
+        '</p><br>' +
+        '<button class="btn" onclick="resolveIncident(' + number + ')">Mark resolved</button> ' +
+        '<button class="btn outline" onclick="showPage(\'tasks\')">Create task from incident</button> ' +
+        '<button class="btn outline" style="color:#333;border-color:#333">Message reporter</button>';
+}
+
+// Mark an incident as resolved
+function resolveIncident(number){
+    incidents[number].step = 3;
+    showIncident(number);
+}
+
+// Show the first incident when the page loads
+showIncident(0);
+</script>
+</body>
+</html>
