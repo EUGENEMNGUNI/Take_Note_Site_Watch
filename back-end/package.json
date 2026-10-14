@@ -1,0 +1,22 @@
+{
+  "name": "site-watch-back-end",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Server-side scripts and shared logic for Site Watch (Supabase).",
+  "engines": {
+    "node": ">=22.9"
+  },
+  "scripts": {
+    "seed:users": "tsx --env-file-if-exists=.env scripts/seed-users.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}
