@@ -8,9 +8,10 @@
     "node": ">=22.9"
   },
   "scripts": {
-    "check:connection": "tsx --env-file-if-exists=.env scripts/check-connection.ts",
+    "test": "tsx --test ../tests/automated/register-employee.test.ts",
+    "check:connection":"tsx --env-file-if-exists=.env scripts/check-connection.ts",
     "seed:users":"tsx --env-file-if-exists=.env scripts/seed-users.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p ../tests/automated"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"

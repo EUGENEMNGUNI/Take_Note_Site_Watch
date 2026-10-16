@@ -18,6 +18,20 @@ failed assertion. Users are impersonated the way Supabase does it: a database
 role (`anon` or `authenticated`) plus the caller's id in
 `request.jwt.claim.sub`.
 
+## Automated server tests
+
+`tests/automated/register-employee.test.ts` tests the employee registration
+logic with fake Supabase clients: order of checks, error mapping, rollback of
+the new account, and that the password and personal data never appear in
+errors or logs.
+
+```bash
+cd back-end
+npm install
+npm test            # 21 tests
+npm run typecheck   # also type-checks the tests
+```
+
 ### Coverage against `requirements.md` §8
 
 | Acceptance criterion | Where it is checked |
@@ -30,6 +44,7 @@ role (`anon` or `authenticated`) plus the caller's id in
 | Leave requests and decisions recorded correctly | submit, approve, reviewer and time stamps, double review, self-review, cancel |
 | Sensitive documents protected | private bucket, path rules, upload only for own pending request, scoped admin reads, no changes by employees |
 | Invalid input handled | out-of-range coordinates, bad file type and size, bad dates, unknown site |
+| Only authorised administrators register employees | `register_employee_profile`: not callable by browser roles, actor and site scope re-checked, cannot re-register or move existing people, audit entry names the administrator; server tests for 401/403/409/422 and rollback |
 | Audit trail | every audited action, plus append-only enforcement even for the service role |
 
 ### What these tests do not cover

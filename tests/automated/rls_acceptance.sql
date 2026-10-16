@@ -53,6 +53,7 @@ end $$;
 \set as_super  'reset role; set request.jwt.claim.sub = ''''; '
 \set as_anon   'reset role; set request.jwt.claim.sub = ''''; set role anon; '
 \set as_noauth 'reset role; set request.jwt.claim.sub = ''''; set role authenticated; '
+\set as_service 'reset role; set request.jwt.claim.sub = ''''; set role service_role; '
 \set as_admin1 'reset role; set request.jwt.claim.sub = ''00000000-0000-4000-8000-0000000000a1''; set role authenticated; '
 \set as_admin2 'reset role; set request.jwt.claim.sub = ''00000000-0000-4000-8000-0000000000a2''; set role authenticated; '
 \set as_emp1   'reset role; set request.jwt.claim.sub = ''00000000-0000-4000-8000-0000000000e1''; set role authenticated; '
@@ -421,5 +422,105 @@ select t.raises($$truncate public.audit_log$$, '42501');
 select t.raises($$delete from public.attendance$$, '42501');
 select t.raises(format($q$update public.attendance set check_out_at = now() where id = %L$q$, :'ci1'), '42501');
 select t.raises(format($q$update public.attendance set employee_id = '00000000-0000-4000-8000-0000000000e2' where id = %L$q$, :'ci2'), '42501');
+
+-- =============================================================================
+-- Registering employees (0007): server-only completion of a new account
+--   admin1 manages site one only; admin2 manages site two only.
+-- =============================================================================
+:as_super
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('00000000-0000-4000-8000-0000000000e4', 'newhire@test.local', '{"full_name":"x"}'),
+  ('00000000-0000-4000-8000-0000000000e5', 'newhire2@test.local', '{}');
+select t.assert((select home_site_id is null and role = 'employee'
+                   from public.profiles where id = '00000000-0000-4000-8000-0000000000e4'),
+  'a new account starts as an employee with no home site');
+
+:as_admin1
+select t.assert((select count(*) from public.profiles where id = '00000000-0000-4000-8000-0000000000e4') = 0,
+  'an administrator cannot see an account that has no home site yet');
+
+-- Browser roles can never call the function, whoever they are.
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000e4', 'New Hire', '11111111-1111-4111-8111-111111111111')$$, '42501');
+:as_emp1
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000e4', 'New Hire', '11111111-1111-4111-8111-111111111111')$$, '42501');
+:as_anon
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000e4', 'New Hire', '11111111-1111-4111-8111-111111111111')$$, '42501');
+
+-- Server (service role): the acting administrator is still checked.
+:as_service
+select t.raises($$select public.register_employee_profile(null,
+  '00000000-0000-4000-8000-0000000000e4', 'New Hire', '11111111-1111-4111-8111-111111111111')$$, '42501');
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000e1',
+  '00000000-0000-4000-8000-0000000000e4', 'New Hire', '11111111-1111-4111-8111-111111111111')$$, '42501');
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a2',
+  '00000000-0000-4000-8000-0000000000e4', 'New Hire', '11111111-1111-4111-8111-111111111111')$$, '42501');
+select t.raises(format($q$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000e4', 'New Hire', %L)$q$, :'annex'), 'P0002');
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000e4', 'New Hire', '99999999-9999-4999-8999-999999999999')$$, '42501');
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000e4', 'A', '11111111-1111-4111-8111-111111111111')$$, '22023');
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000e4', null, '11111111-1111-4111-8111-111111111111')$$, '22023');
+-- It cannot move or rename an existing, already-registered person.
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000e1', 'Hijack', '11111111-1111-4111-8111-111111111111')$$, 'P0002');
+-- ...or an administrator.
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000a2', 'Hijack', '11111111-1111-4111-8111-111111111111')$$, 'P0002');
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000ff', 'Ghost', '11111111-1111-4111-8111-111111111111')$$, 'P0002');
+
+:as_super
+select t.assert((select home_site_id is null from public.profiles where id = '00000000-0000-4000-8000-0000000000e4'),
+  'every rejected attempt left the new account untouched');
+select t.assert((select count(*) from public.audit_log where action = 'user.registered') = 0,
+  'rejected attempts wrote no registration audit entries');
+
+-- The happy path.
+:as_service
+select t.assert((public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000e4', '  New Hire  ', '11111111-1111-4111-8111-111111111111')).home_site_id
+  = '11111111-1111-4111-8111-111111111111'::uuid,
+  'registration sets the home site');
+
+:as_super
+select t.assert((select full_name = 'New Hire' and role = 'employee'
+                   from public.profiles where id = '00000000-0000-4000-8000-0000000000e4'),
+  'registration trims and stores the name and keeps the employee role');
+select t.assert((select count(*) from public.audit_log
+                  where action = 'user.registered'
+                    and entity_id = '00000000-0000-4000-8000-0000000000e4'
+                    and actor_id = '00000000-0000-4000-8000-0000000000a1') = 1,
+  'the audit entry names the administrator who registered the employee');
+select t.assert((select metadata ->> 'email' from public.audit_log where action = 'user.registered') = 'newhire@test.local',
+  'the audit entry records the email');
+
+:as_admin1
+select t.assert((select count(*) from public.profiles where id = '00000000-0000-4000-8000-0000000000e4') = 1,
+  'the administrator can now see the registered employee');
+:as_admin2
+select t.assert((select count(*) from public.profiles where id = '00000000-0000-4000-8000-0000000000e4') = 0,
+  'an administrator of another site cannot see them');
+:as_emp1
+select t.assert((select count(*) from public.profiles where id = '00000000-0000-4000-8000-0000000000e4') = 0,
+  'other employees cannot see them either');
+
+-- Registering the same person twice is refused.
+:as_service
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000e4', 'New Hire', '11111111-1111-4111-8111-111111111111')$$, 'P0002');
+
+-- A deactivated administrator can no longer register anyone.
+:as_super
+update public.profiles set is_active = false where id = '00000000-0000-4000-8000-0000000000a1';
+:as_service
+select t.raises($$select public.register_employee_profile('00000000-0000-4000-8000-0000000000a1',
+  '00000000-0000-4000-8000-0000000000e5', 'Second Hire', '11111111-1111-4111-8111-111111111111')$$, '42501');
+:as_super
+update public.profiles set is_active = true where id = '00000000-0000-4000-8000-0000000000a1';
 
 select 'ALL DATABASE TESTS PASSED' as result;

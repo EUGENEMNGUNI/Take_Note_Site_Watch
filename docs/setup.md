@@ -18,6 +18,7 @@ The migrations in `database/schema/` are applied **in filename order**:
 0004_attendance.sql  attendance, check-in/out, alerts, hours view
 0005_leave.sql       leave requests, documents, review
 0006_storage.sql     private document bucket and its policies
+0007_register_employee.sql  server-only step that completes a new employee's account
 ```
 
 Either paste them into the Supabase SQL Editor one at a time, or run them with
@@ -82,6 +83,44 @@ npm install
 npm run dev
 ```
 
+## Registering employees
+
+`POST /api/admin/employees` creates an employee's sign-in account and sets their
+home site. It runs on the server with the secret key, which is why it is an API
+route and not something the browser does directly. Apply
+`0007_register_employee.sql` first.
+
+Request (JSON, same origin, signed in as an administrator):
+
+```json
+{ "fullName": "Thandi Nkosi", "email": "thandi@example.com", "homeSiteId": "<site uuid>" }
+```
+
+Success (`201`, never cached): the new employee plus a **temporary password**
+that is shown once and not stored anywhere. The administrator passes it to the
+employee. The account is marked `must_change_password` in its `app_metadata`
+(users cannot edit that); the sign-in screen must enforce the change when it is
+built.
+
+Errors come back as `{ "error": { "code", "message", "fields?" } }`:
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 400 | `invalid_input`, `invalid_json` | Bad name, email or site id (see `fields`) |
+| 401 | `not_signed_in` | No valid session |
+| 403 | `forbidden`, `bad_origin` | Not an administrator of that site, or a cross-site request |
+| 409 | `email_taken` | An account with that email already exists |
+| 413, 415 | `payload_too_large`, `unsupported_media_type` | Not a small JSON body |
+| 422 | `site_inactive` | The chosen site is inactive |
+| 502 | `account_creation_failed` | Supabase could not create the account |
+
+Why a temporary password and not an email invite: Supabase's built-in email
+only delivers to your own team members until you connect an email provider
+(SMTP). Once one is connected, switching to invitations is a small change.
+
+Registering needs the administrator to have access to the site in
+`admin_site_access`. The seeded test administrator has both sample sites.
+
 ## Supabase clients in the front end
 
 | File | Use it in | Acts as |
@@ -100,5 +139,8 @@ is linked: `supabase gen types typescript --project-id <id>`.
 ## Not done yet
 
 Route protection and session refresh (a Next.js proxy), the sign-in and
-password-reset screens wired to Supabase Auth, and the screens that call the
-functions described in `database-design.md`.
+password-reset screens wired to Supabase Auth, the forced password change at
+first sign-in, and the screens that call the functions and endpoints described
+in `database-design.md` (including a "register employee" form that calls
+`POST /api/admin/employees`). Until sign-in exists, nobody has a session, so
+the endpoint cannot be used from the browser yet.

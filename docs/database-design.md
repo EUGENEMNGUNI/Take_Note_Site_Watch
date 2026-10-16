@@ -61,6 +61,22 @@ View: `attendance_hours` (per record: hours worked, open flag). It uses
 | `acknowledge_alert(id, status)` | admin | Marks an in-scope alert acknowledged or resolved. |
 | `admin_set_user_role(user, role)` | admin | Changes the role of an in-scope user; not one's own. |
 | `admin_set_user_active(user, active)` | admin | Activates or deactivates an in-scope user; not one's own. |
+| `register_employee_profile(actor, user, name, site)` | **server only** (service role) | Completes a newly created account: sets the name and home site, and writes a `user.registered` audit entry naming the acting administrator. Re-checks that the actor is an active administrator of the site, the site is active, and the account is still unregistered. Browser roles cannot execute it. |
+
+### Registering an employee
+
+Creating a sign-in account needs the secret key, so it happens on the server
+(`front-end/app/api/admin/employees/route.ts`, see `docs/setup.md`):
+
+1. The server confirms the caller is signed in and administers the chosen site
+   (as the caller, so Row Level Security applies).
+2. It creates the Auth user with the secret key. The `handle_new_user` trigger
+   gives it a profile with role `employee` and no home site, so nobody can see
+   it yet.
+3. It calls `register_employee_profile`, which sets the name and home site and
+   writes the audit entry. If this step fails the Auth user is deleted again.
+
+The role can never be chosen by the caller: it is always `employee`.
 
 Errors use SQLSTATE codes the application can map to messages: `28000` not
 signed in, `42501` not allowed, `P0002` not found, `22023` invalid input,
@@ -81,7 +97,8 @@ Object keys must be `<employee_id>/<leave_request_id>/<file name>`.
 
 Recorded automatically by triggers (also when the change comes from the service
 role, with no actor): role, status and home-site changes; site create, edit and
-(de)activation; administrator scope grants and revocations; leave submission,
+(de)activation; employee registration (`user.registered`, written with the
+administrator as actor); administrator scope grants and revocations; leave submission,
 documents added and every status change; alert acknowledgement and resolution.
 
 Not yet recorded: sign-ins (Supabase Auth keeps its own log; surfacing it is
@@ -109,8 +126,12 @@ These come from `requirements.md` §9 and are deliberately not hard-coded.
 
 ## Known limits
 
-- A newly created user has no home site, so no administrator can see or manage
-  them until the server assigns one (the seed script shows how).
+- An account created outside the registration endpoint (for example with
+  "Add user" in the Supabase dashboard) has no home site, so no administrator
+  can see or manage it. Register people through the endpoint instead.
+- Registration audit: the profile trigger also records a `user.home_site_changed`
+  entry with no actor, next to the `user.registered` entry that names the
+  administrator. Read the `user.registered` entry.
 - Employees can list all active sites and their coordinates (needed to check
   in). The coordinates are not personal data, but say so if that is a concern.
 - Location coordinates are stored with each attendance record. Keep this to the
