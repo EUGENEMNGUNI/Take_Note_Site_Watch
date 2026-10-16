@@ -46,6 +46,19 @@ Supabase Project Settings, API. The service role key bypasses Row Level
 Security: keep it server-side, never prefix it with `NEXT_PUBLIC_`, never commit
 it. `.env.local` and `.env` are git-ignored.
 
+## Troubleshooting the connection
+
+```bash
+cd back-end
+npm install
+npm run check:connection
+```
+
+It checks both env files (wrong key in the wrong place, quotes, leftover
+brackets, local URL), whether Supabase answers and accepts the key, whether all
+tables exist, and whether the sample sites and test accounts are there. It
+prints what to fix and never prints the keys.
+
 ## 3. Test accounts (development only)
 
 After the seed has created the sample sites:
