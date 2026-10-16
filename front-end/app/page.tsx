@@ -2,27 +2,115 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+
+import {
+  getAuthenticatedProfile,
+  setStoredUserEmail,
+} from "@/lib/auth";
+import { createClient } from "@/lib/supabase/browser";
 
 export default function Home() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [role, setRole] = useState("employee");
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent) => {
+  useEffect(() => {
+    let active = true;
+    void getAuthenticatedProfile()
+      .then(async (profile) => {
+        if (!active || !profile) return;
+        if (!profile.isActive) {
+          const { error } = await createClient().auth.signOut();
+          if (!active) return;
+          setMessage(
+            error
+              ? `Your account is inactive and sign-out failed: ${error.message}`
+              : "Your account is inactive. Contact your administrator.",
+          );
+          return;
+        }
+        setStoredUserEmail(profile.email);
+        router.replace(profile.role === "admin" ? "/admin" : "/employee");
+      })
+      .catch(() => {
+        if (active) {
+          setMessage("We could not verify your existing session. Please sign in again.");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSubmitting) return;
 
-    if (!role) {
-      setMessage("Please choose how you are signing in.");
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
+
+    if (!email || !password) {
+      setMessage("Please enter your work email and password.");
       return;
     }
 
-    sessionStorage.setItem("siteWatchRole", role);
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      setMessage("Please enter a valid work email.");
+      return;
+    }
 
-    if (role === "employee") router.push("/employee");
-    if (role === "manager") router.push("/manager");
-    if (role === "admin") router.push("/admin");
+    if (password.length < 6) {
+      setMessage("Password must be at least 6 characters.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setMessage("");
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+
+      const profile = await getAuthenticatedProfile();
+      if (!profile) {
+        const { error: signOutError } = await supabase.auth.signOut();
+        setMessage(
+          signOutError
+            ? `Could not verify the account or clear its session: ${signOutError.message}`
+            : "No account profile was found. Contact your administrator.",
+        );
+        return;
+      }
+
+      if (!profile.isActive) {
+        const { error: signOutError } = await supabase.auth.signOut();
+        setMessage(
+          signOutError
+            ? `Your account is inactive and sign-out failed: ${signOutError.message}`
+            : "Your account is inactive. Contact your administrator.",
+        );
+        return;
+      }
+
+      setStoredUserEmail(profile.email || email);
+      router.replace(profile.role === "admin" ? "/admin" : "/employee");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Sign in failed unexpectedly. Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -65,7 +153,7 @@ export default function Home() {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="email">Work email</label>
-            <input id="email" type="email" placeholder="name@company.co.za" autoComplete="email" required />
+            <input id="email" name="email" type="email" placeholder="name@company.co.za" autoComplete="email" required />
           </div>
 
           <div className="form-group">
@@ -73,6 +161,7 @@ export default function Home() {
             <div className="password-wrap">
               <input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 placeholder="Enter your password"
                 autoComplete="current-password"
@@ -84,44 +173,13 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="form-group">
-            <label>Sign in as</label>
-            <div className="role-select">
-              <label className="role-option">
-                <input type="radio" name="role" value="employee" checked={role === "employee"} onChange={() => setRole("employee")} />
-                <span>
-                  <b>Employee</b>
-                  <small>Check in, tasks and leave</small>
-                </span>
-              </label>
-
-              <label className="role-option">
-                <input type="radio" name="role" value="manager" checked={role === "manager"} onChange={() => setRole("manager")} />
-                <span>
-                  <b>Site Manager</b>
-                  <small>Presence, tasks and incidents</small>
-                </span>
-              </label>
-
-              <label className="role-option">
-                <input type="radio" name="role" value="admin" checked={role === "admin"} onChange={() => setRole("admin")} />
-                <span>
-                  <b>Administrator</b>
-                  <small>People, sites, leave and audit</small>
-                </span>
-              </label>
-            </div>
-          </div>
-
           <div className="login-options">
-            <label className="remember">
-              <input type="checkbox" />
-              Remember me
-            </label>
             <Link href="/forgot-password">Forgot password?</Link>
           </div>
 
-          <button type="submit" className="btn login-btn">Sign in</button>
+          <button type="submit" className="btn login-btn" disabled={isSubmitting}>
+            {isSubmitting ? "Signing in..." : "Sign in"}
+          </button>
           {message ? <div className="message error">{message}</div> : null}
         </form>
       </div>

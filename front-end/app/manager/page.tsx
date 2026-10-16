@@ -1,10 +1,21 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+
+import { getStoredUserEmail, signOut } from "@/lib/auth";
+import { RoleGuard } from "@/components/role-guard";
 
 export default function ManagerPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [displayName, setDisplayName] = useState("Site Manager");
+  const [signOutMessage, setSignOutMessage] = useState("");
+
+  useEffect(() => {
+    const email = getStoredUserEmail();
+    setDisplayName(email ? email.split("@")[0].replace(/[._-]/g, " ") : "Site manager");
+  }, []);
 
   const pageTitle = useMemo(() => {
     if (activeTab === "tasks") return "Tasks";
@@ -12,41 +23,54 @@ export default function ManagerPage() {
     return "Dashboard";
   }, [activeTab]);
 
-  return (
-    <div className="app">
-      <aside className="side">
-        <div className="logo">TAKE NOTE</div>
-        <div className="tag">SITE WATCH</div>
-        <button type="button" className={`nav ${activeTab === "dashboard" ? "on" : ""}`} onClick={() => setActiveTab("dashboard")}>Dashboard</button>
-        <button type="button" className="nav" onClick={() => setActiveTab("dashboard")}>Employees</button>
-        <button type="button" className="nav" onClick={() => setActiveTab("dashboard")}>Check-ins log</button>
-        <button type="button" className={`nav ${activeTab === "tasks" ? "on" : ""}`} onClick={() => setActiveTab("tasks")}>
-          Tasks <span className="badge">9</span>
-        </button>
-        <button type="button" className={`nav ${activeTab === "incidents" ? "on" : ""}`} onClick={() => setActiveTab("incidents")}>
-          Incidents <span className="badge" style={{ background: "#fadcdc", color: "#9a1b1b" }}>3</span>
-        </button>
-        <button type="button" className="nav" onClick={() => setActiveTab("dashboard")}>Messages</button>
-        <div className="user">
-          <b>Nomsa Zulu</b>
-          <br />
-          Site Manager
-          <br />
-          <Link href="/">Sign out</Link>
-        </div>
-      </aside>
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      router.replace("/");
+    } catch (error) {
+      setSignOutMessage(
+        error instanceof Error ? error.message : "Could not sign out. Please try again.",
+      );
+    }
+  };
 
-      <main className="main">
-        <div className="top">
-          <div>
-            <h1>{activeTab === "dashboard" ? "Company Headquarters" : pageTitle}</h1>
-            <span className="small">Wednesday 7 October · 10:13</span>
+  return (
+    <RoleGuard allowedRoles={["manager"]}>
+      <div className="app">
+        <aside className="side">
+          <div className="logo">TAKE NOTE</div>
+          <div className="tag">SITE WATCH</div>
+          <button type="button" className={`nav ${activeTab === "dashboard" ? "on" : ""}`} onClick={() => setActiveTab("dashboard")}>Dashboard</button>
+          <button type="button" className="nav" onClick={() => setActiveTab("dashboard")}>Employees</button>
+          <button type="button" className="nav" onClick={() => setActiveTab("dashboard")}>Check-ins log</button>
+          <button type="button" className={`nav ${activeTab === "tasks" ? "on" : ""}`} onClick={() => setActiveTab("tasks")}>
+            Tasks <span className="badge">9</span>
+          </button>
+          <button type="button" className={`nav ${activeTab === "incidents" ? "on" : ""}`} onClick={() => setActiveTab("incidents")}>
+            Incidents <span className="badge" style={{ background: "#fadcdc", color: "#9a1b1b" }}>3</span>
+          </button>
+          <button type="button" className="nav" onClick={() => setActiveTab("dashboard")}>Messages</button>
+          <div className="user">
+            <b>{displayName}</b>
+            <br />
+            Site Manager
+            <br />
+            <button type="button" className="link-button" onClick={handleSignOut}>Sign out</button>
+            {signOutMessage ? <div className="message error" role="alert">{signOutMessage}</div> : null}
           </div>
-          <div>
-            <span className="pill green">Monitoring on · ends 17:00</span>
-            <button className="btn" style={{ marginLeft: 12 }} onClick={() => setActiveTab("tasks")}>New task</button>
+        </aside>
+
+        <main className="main">
+          <div className="top">
+            <div>
+              <h1>{activeTab === "dashboard" ? "Company Headquarters" : pageTitle}</h1>
+              <span className="small">Wednesday 7 October · 10:13</span>
+            </div>
+            <div>
+              <span className="pill green">Monitoring on · ends 17:00</span>
+              <button className="btn" style={{ marginLeft: 12 }} onClick={() => setActiveTab("tasks")}>New task</button>
+            </div>
           </div>
-        </div>
 
         {activeTab === "dashboard" && (
           <>
@@ -251,5 +275,6 @@ export default function ManagerPage() {
         )}
       </main>
     </div>
+    </RoleGuard>
   );
 }

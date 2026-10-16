@@ -46,6 +46,12 @@ Supabase Project Settings, API. The service role key bypasses Row Level
 Security: keep it server-side, never prefix it with `NEXT_PUBLIC_`, never commit
 it. `.env.local` and `.env` are git-ignored.
 
+The employee-registration API runs in the Next.js server, so also add the
+service role key to the private `front-end/.env.local` as
+`SUPABASE_SERVICE_ROLE_KEY`. Restart `npm run dev` after changing environment
+variables. Site creation uses the signed-in administrator's normal client and
+is protected by database Row Level Security.
+
 ## 3. Test accounts (development only)
 
 After the seed has created the sample sites:
@@ -86,6 +92,10 @@ is linked: `supabase gen types typescript --project-id <id>`.
 
 ## Not done yet
 
-Route protection and session refresh (a Next.js proxy), the sign-in and
-password-reset screens wired to Supabase Auth, and the screens that call the
-functions described in `database-design.md`.
+The sign-in flow now uses Supabase Auth and the signed-in user's `profiles`
+row to route employees and administrators. Administrators can create sites and
+register employee accounts from the dashboard. The forgot-password page is
+still a demo, server-side route protection/session refresh has not been added,
+and attendance and leave dashboard content remains demo data. The database
+schema currently supports employee and administrator roles; the manager screen
+is not backed by a database role.
