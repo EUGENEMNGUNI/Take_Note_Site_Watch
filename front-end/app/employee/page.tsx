@@ -1,37 +1,237 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { getStoredUserEmail, signOut } from "@/lib/auth";
 import { RoleGuard } from "@/components/role-guard";
 
+type SiteRecord = {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radius_m: number;
+  enforce_radius: boolean;
+};
+
+type AttendanceRecord = {
+  id: string;
+  site_id: string;
+  check_in_at: string;
+  check_out_at: string | null;
+  is_open: boolean;
+  hours_worked: number | null;
+  presence_status: string;
+  check_in_distance_m: number | null;
+};
+
+type LeaveRequest = {
+  id: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  reason: string | null;
+  status: string;
+  decision_note: string | null;
+};
+
 export default function EmployeePage() {
   const router = useRouter();
-  const [checkedIn, setCheckedIn] = useState(false);
-  const [checkMessage, setCheckMessage] = useState(
-    "If you are off the company network, check-in is unavailable.",
-  );
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [sites, setSites] = useState<SiteRecord[]>([]);
+  const [homeSiteId, setHomeSiteId] = useState<string | null>(null);
+  const [attendanceMessage, setAttendanceMessage] = useState("");
+  const [attendanceError, setAttendanceError] = useState("");
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [leaveMessage, setLeaveMessage] = useState("");
+  const [leaveError, setLeaveError] = useState("");
+  const [isSavingLeave, setIsSavingLeave] = useState(false);
   const [displayName, setDisplayName] = useState("Employee");
   const [signOutMessage, setSignOutMessage] = useState("");
+  const checkInRequestId = useRef<string | null>(null);
+  const checkOutRequestId = useRef<string | null>(null);
+  const openAttendance = attendance.find((record) => record.is_open) ?? null;
+  const homeSite = sites.find((site) => site.id === homeSiteId) ?? null;
 
   useEffect(() => {
-    const email = getStoredUserEmail();
-    setDisplayName(email ? email.split("@")[0].replace(/[._-]/g, " ") : "Employee");
-
-    const storedCheckIn = window.sessionStorage.getItem("siteWatchCheckedIn");
-    setCheckedIn(storedCheckIn === "true");
+    void Promise.resolve().then(() => {
+      const email = getStoredUserEmail();
+      setDisplayName(email ? email.split("@")[0].replace(/[._-]/g, " ") : "Employee");
+    });
   }, []);
 
-  const handleCheckIn = () => {
-    const nextState = !checkedIn;
-    setCheckedIn(nextState);
-    window.sessionStorage.setItem("siteWatchCheckedIn", String(nextState));
-    setCheckMessage(
-      nextState
-        ? `You checked in at ${new Date().toTimeString().slice(0, 5)}`
-        : "You checked out successfully.",
-    );
+  const refreshAttendance = useCallback(async () => {
+    const response = await fetch("/api/attendance");
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error ?? "Could not load attendance.");
+    }
+
+    setAttendance(result.attendance ?? []);
+    setSites(result.sites ?? []);
+    setHomeSiteId(result.profile?.home_site_id ?? null);
+    if (result.profile?.full_name) setDisplayName(result.profile.full_name);
+  }, []);
+
+  const refreshLeaveRequests = useCallback(async () => {
+    const response = await fetch("/api/leave");
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error ?? "Could not load leave requests.");
+    }
+    setLeaveRequests(result.leaveRequests ?? []);
+  }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(refreshAttendance).catch((error: unknown) => {
+      setAttendanceError(error instanceof Error ? error.message : "Could not load attendance.");
+    });
+    void Promise.resolve().then(refreshLeaveRequests).catch((error: unknown) => {
+      setLeaveError(error instanceof Error ? error.message : "Could not load leave requests.");
+    });
+  }, [refreshAttendance, refreshLeaveRequests]);
+
+  const handleAttendance = async () => {
+    if (isSavingAttendance) return;
+    setIsSavingAttendance(true);
+    setAttendanceError("");
+    setAttendanceMessage("");
+
+    try {
+      let requestId: string;
+      let response: Response;
+      if (openAttendance) {
+        checkOutRequestId.current ??= crypto.randomUUID();
+        requestId = checkOutRequestId.current;
+        response = await fetch("/api/attendance", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requestId }),
+        });
+      } else {
+        if (!homeSiteId) {
+          throw new Error("Your account has no home site. Contact your administrator.");
+        }
+
+        checkInRequestId.current ??= crypto.randomUUID();
+        requestId = checkInRequestId.current;
+        let coordinates: { latitude: number; longitude: number; accuracyM: number } | null = null;
+        if (navigator.geolocation) {
+          coordinates = await new Promise((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+              (position) =>
+                resolve({
+                  latitude: position.coords.latitude,
+                  longitude: position.coords.longitude,
+                  accuracyM: position.coords.accuracy,
+                }),
+              () => resolve(null),
+              { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+            );
+          });
+        }
+
+        response = await fetch("/api/attendance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            siteId: homeSiteId,
+            requestId,
+            ...(coordinates ?? {}),
+          }),
+        });
+        if (!coordinates) {
+          setAttendanceMessage("Location is unavailable; the site may record this check-in as unverified.");
+        }
+      }
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error ?? "Attendance could not be updated.");
+      }
+
+      if (openAttendance) {
+        checkOutRequestId.current = null;
+        setAttendanceMessage("You checked out successfully.");
+      } else {
+        checkInRequestId.current = null;
+        const status = result.attendance?.presence_status;
+        setAttendanceMessage(
+          status === "verified"
+            ? "You checked in and your site presence was verified."
+            : status === "outside_radius"
+              ? "You checked in outside the site radius. An administrator was alerted."
+              : "You checked in; your site presence could not be verified.",
+        );
+      }
+      await refreshAttendance();
+    } catch (error) {
+      setAttendanceError(
+        error instanceof Error ? error.message : "Attendance could not be updated.",
+      );
+    } finally {
+      setIsSavingAttendance(false);
+    }
+  };
+
+  const handleLeaveSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSavingLeave) return;
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    setIsSavingLeave(true);
+    setLeaveMessage("");
+    setLeaveError("");
+
+    try {
+      const response = await fetch("/api/leave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startDate: formData.get("start_date"),
+          endDate: formData.get("end_date"),
+          reason: formData.get("reason"),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error ?? "Leave request could not be submitted.");
+      }
+
+      form.reset();
+      setLeaveMessage("Sick-leave request submitted.");
+      await refreshLeaveRequests();
+    } catch (error) {
+      setLeaveError(
+        error instanceof Error ? error.message : "Leave request could not be submitted.",
+      );
+    } finally {
+      setIsSavingLeave(false);
+    }
+  };
+
+  const handleCancelLeave = async (requestId: string) => {
+    setLeaveMessage("");
+    setLeaveError("");
+    try {
+      const response = await fetch(`/api/leave/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel" }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error ?? "Leave request could not be cancelled.");
+      }
+      setLeaveMessage("Leave request cancelled.");
+      await refreshLeaveRequests();
+    } catch (error) {
+      setLeaveError(
+        error instanceof Error ? error.message : "Leave request could not be cancelled.",
+      );
+    }
   };
 
   const handleSignOut = async () => {
@@ -68,43 +268,52 @@ export default function EmployeePage() {
         </aside>
 
         <main className="main">
-          <p className="small">Wednesday 7 October</p>
           <h1>Good morning, {displayName}</h1>
           <br />
 
           <div className="grid2">
             <div className="card">
               <h2>
-                My site: Company Headquarters
-                <span className="pill green" style={{ marginLeft: 12 }}>Within site</span>
+                My site: {homeSite?.name ?? "Not assigned"}
+                {openAttendance ? (
+                  <span className="pill green" style={{ marginLeft: 12 }}>Checked in</span>
+                ) : null}
               </h2>
 
               <table>
                 <tbody>
                   <tr>
                     <td>Signed in</td>
-                    <td className="green">{checkedIn ? "Verified" : "Not active"}</td>
-                  </tr>
-                  <tr>
-                    <td>Company network</td>
-                    <td className="green">Connected</td>
+                    <td className={openAttendance ? "green" : ""}>
+                      {openAttendance ? openAttendance.presence_status.replace("_", " ") : "Not active"}
+                    </td>
                   </tr>
                   <tr>
                     <td>Distance from site centre</td>
-                    <td>42 m of 200 m</td>
+                    <td>
+                      {openAttendance?.check_in_distance_m == null
+                        ? "Not available"
+                        : `${Math.round(openAttendance.check_in_distance_m)} m of ${homeSite?.radius_m ?? "—"} m`}
+                    </td>
                   </tr>
                   <tr>
-                    <td>Working hours</td>
-                    <td>08:00 to 17:00</td>
+                    <td>Current check-in</td>
+                    <td>{openAttendance ? new Date(openAttendance.check_in_at).toLocaleTimeString() : "—"}</td>
                   </tr>
                 </tbody>
               </table>
 
               <br />
-              <button className="btn" onClick={handleCheckIn} style={{ width: "100%" }}>
-                {checkedIn ? "Check out" : "Check in"}
+              <button
+                className="btn"
+                onClick={handleAttendance}
+                disabled={isSavingAttendance || (!openAttendance && !homeSite)}
+                style={{ width: "100%" }}
+              >
+                {isSavingAttendance ? "Saving..." : openAttendance ? "Check out" : "Check in"}
               </button>
-              <p className="small" style={{ marginTop: 10 }}>{checkMessage}</p>
+              {attendanceMessage ? <p className="small" role="status" style={{ marginTop: 10 }}>{attendanceMessage}</p> : null}
+              {attendanceError ? <p className="message error" role="alert">{attendanceError}</p> : null}
             </div>
 
             <div className="card">
@@ -139,27 +348,41 @@ export default function EmployeePage() {
           <div className="grid2" style={{ gridTemplateColumns: "1fr 1fr" }}>
             <div className="card" id="leave">
               <h2>Leave</h2>
-              <p className="small">Sick leave: 7 days left, 3 used</p>
+              <p className="small">Submit and track sick-leave requests.</p>
+              <form onSubmit={handleLeaveSubmit}>
+                <label htmlFor="leave-start-date">Start date</label>
+                <input id="leave-start-date" name="start_date" type="date" required />
 
-              <label>Leave type</label>
-              <select>
-                <option>Sick leave</option>
-                <option>Annual leave</option>
-              </select>
+                <label htmlFor="leave-end-date">End date</label>
+                <input id="leave-end-date" name="end_date" type="date" required />
 
-              <label>Start date</label>
-              <input type="date" />
+                <label htmlFor="leave-reason">Reason</label>
+                <textarea id="leave-reason" name="reason" rows={2} maxLength={2000} placeholder="Briefly describe the reason" />
 
-              <label>End date</label>
-              <input type="date" />
+                <p className="small">Supporting document upload is not available yet.</p>
+                <button className="btn" type="submit" disabled={isSavingLeave}>
+                  {isSavingLeave ? "Submitting..." : "Submit request"}
+                </button>
+              </form>
+              {leaveMessage ? <p className="message-box success" role="status">{leaveMessage}</p> : null}
+              {leaveError ? <p className="message-box error" role="alert">{leaveError}</p> : null}
 
-              <label>Reason</label>
-              <textarea rows={2} placeholder="Briefly describe the reason" />
-
-              <label>Sick note</label>
-              <input type="file" />
-              <br />
-              <button className="btn">Submit request</button>
+              <h3>Your requests</h3>
+              {leaveRequests.map((request) => (
+                <div className="task" key={request.id}>
+                  <b>{request.leave_type} leave</b>
+                  <span className="pill amber" style={{ float: "right" }}>{request.status}</span>
+                  <br />
+                  <span className="small">{request.start_date} to {request.end_date}</span>
+                  {request.decision_note ? <p className="small">{request.decision_note}</p> : null}
+                  {request.status === "pending" ? (
+                    <button type="button" className="link-button" onClick={() => void handleCancelLeave(request.id)}>
+                      Cancel request
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+              {leaveRequests.length === 0 && !leaveError ? <p className="small">No leave requests yet.</p> : null}
             </div>
 
             <div className="card" id="report">

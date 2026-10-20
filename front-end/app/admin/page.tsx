@@ -26,15 +26,36 @@ type EmployeeRecord = {
   is_active: boolean;
 };
 
+type LeaveRequestRecord = {
+  id: string;
+  employee_id: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  reason: string | null;
+  status: string;
+  decision_note: string | null;
+  created_at: string;
+};
+
+type LeaveEmployeeRecord = {
+  id: string;
+  full_name: string;
+  email: string | null;
+};
+
 export default function AdminPage() {
   const router = useRouter();
   const [radius, setRadius] = useState(200);
-  const [status, setStatus] = useState("Pending");
-  const [statusStyle, setStatusStyle] = useState("pill amber");
   const [displayName, setDisplayName] = useState("Admin");
   const [signOutMessage, setSignOutMessage] = useState("");
   const [sites, setSites] = useState<SiteRecord[]>([]);
   const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequestRecord[]>([]);
+  const [leaveEmployees, setLeaveEmployees] = useState<LeaveEmployeeRecord[]>([]);
+  const [leaveError, setLeaveError] = useState("");
+  const [leaveMessage, setLeaveMessage] = useState("");
+  const [processingLeaveId, setProcessingLeaveId] = useState<string | null>(null);
   const [directoryError, setDirectoryError] = useState("");
   const [formMessage, setFormMessage] = useState("");
   const [formMessageType, setFormMessageType] = useState<"error" | "success">("success");
@@ -80,9 +101,26 @@ export default function AdminPage() {
     }
   }, []);
 
+  const refreshLeaveRequests = useCallback(async () => {
+    const response = await fetch("/api/admin/leave");
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error ?? "Could not load leave requests.");
+    }
+    setLeaveRequests(result.leaveRequests ?? []);
+    setLeaveEmployees(result.employees ?? []);
+    setLeaveError("");
+  }, []);
+
   useEffect(() => {
     void Promise.resolve().then(refreshDirectory);
   }, [refreshDirectory]);
+
+  useEffect(() => {
+    void Promise.resolve().then(refreshLeaveRequests).catch((error: unknown) => {
+      setLeaveError(error instanceof Error ? error.message : "Could not load leave requests.");
+    });
+  }, [refreshLeaveRequests]);
 
   const openForm = (form: "site" | "employee") => {
     setFormMessage("");
@@ -182,12 +220,35 @@ export default function AdminPage() {
     }
   };
 
-  const updateRadius = (value: number) => setRadius(value);
-  const decide = (nextStatus: string, tone: string) => {
-    setStatus(nextStatus);
-    setStatusStyle(tone === "green" ? "pill green" : "pill red");
+  const handleLeaveDecision = async (
+    requestId: string,
+    decision: "approved" | "rejected",
+  ) => {
+    setProcessingLeaveId(requestId);
+    setLeaveError("");
+    setLeaveMessage("");
+    try {
+      const response = await fetch(`/api/admin/leave/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error ?? "Leave request could not be reviewed.");
+      }
+      setLeaveMessage(`Leave request ${decision}.`);
+      await refreshLeaveRequests();
+    } catch (error) {
+      setLeaveError(
+        error instanceof Error ? error.message : "Leave request could not be reviewed.",
+      );
+    } finally {
+      setProcessingLeaveId(null);
+    }
   };
 
+  const updateRadius = (value: number) => setRadius(value);
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -213,7 +274,7 @@ export default function AdminPage() {
         <a className="nav" href="#">Site assignments</a>
         <a className="nav" href="#">
           Leave requests
-          <span className="badge">1</span>
+          <span className="badge">{leaveRequests.filter((request) => request.status === "pending").length}</span>
         </a>
         <a className="nav" href="#">Activity history</a>
 
@@ -427,24 +488,42 @@ export default function AdminPage() {
         <div className="grid2" style={{ gridTemplateColumns: "1fr 1.2fr" }}>
           <div className="card">
             <h2>Leave awaiting approval</h2>
-
-            <div style={{ border: "1px solid #e3e0e0", borderRadius: 10, padding: 14 }}>
-              <b>Thabo Mokoena</b>
-              <span className={statusStyle} style={{ float: "right" }}>{status}</span>
-              <br />
-              <span className="small">Sick leave · 03/10 to 04/10 · 2 days</span>
-
-              <p style={{ margin: "8px 0" }}>Reason: flu symptoms</p>
-
-              <a href="#">View sick note (sick-note-thabo.pdf)</a>
-              <br />
-              <br />
-
-              <button className="btn" onClick={() => decide("Approved", "green")}>Approve</button>
-              <button className="btn outline" style={{ marginLeft: 10 }} onClick={() => decide("Rejected", "red")}>Reject</button>
-            </div>
-
-            <p className="small" style={{ marginTop: 10 }}>Balance after approval: 5 of 10 sick days left</p>
+            {leaveMessage ? <p className="message-box success" role="status">{leaveMessage}</p> : null}
+            {leaveError ? <p className="message-box error" role="alert">{leaveError}</p> : null}
+            {leaveRequests.filter((request) => request.status === "pending").map((request) => {
+              const employee = leaveEmployees.find((item) => item.id === request.employee_id);
+              return (
+                <div key={request.id} style={{ border: "1px solid #e3e0e0", borderRadius: 10, padding: 14, marginBottom: 12 }}>
+                  <b>{employee?.full_name || employee?.email || "Employee"}</b>
+                  <span className="pill amber" style={{ float: "right" }}>Pending</span>
+                  <br />
+                  <span className="small">
+                    {request.leave_type} leave · {request.start_date} to {request.end_date}
+                  </span>
+                  {request.reason ? <p style={{ margin: "8px 0" }}>Reason: {request.reason}</p> : null}
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={processingLeaveId === request.id}
+                    onClick={() => void handleLeaveDecision(request.id, "approved")}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    className="btn outline"
+                    type="button"
+                    style={{ marginLeft: 10 }}
+                    disabled={processingLeaveId === request.id}
+                    onClick={() => void handleLeaveDecision(request.id, "rejected")}
+                  >
+                    Reject
+                  </button>
+                </div>
+              );
+            })}
+            {leaveRequests.every((request) => request.status !== "pending") && !leaveError ? (
+              <p className="small">No leave requests are awaiting approval.</p>
+            ) : null}
           </div>
 
           <div className="card">

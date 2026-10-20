@@ -52,6 +52,19 @@ service role key to the private `front-end/.env.local` as
 variables. Site creation uses the signed-in administrator's normal client and
 is protected by database Row Level Security.
 
+## Troubleshooting the connection
+
+```bash
+cd back-end
+npm install
+npm run check:connection
+```
+
+It checks both env files (wrong key in the wrong place, quotes, leftover
+brackets, local URL), whether Supabase answers and accepts the key, whether all
+tables exist, and whether the sample sites and test accounts are there. It
+prints what to fix and never prints the keys.
+
 ## 3. Test accounts (development only)
 
 After the seed has created the sample sites:
@@ -90,12 +103,37 @@ code. On the server, identify the caller with `supabase.auth.getUser()`, not
 Generate TypeScript types for the schema with the Supabase CLI once the project
 is linked: `supabase gen types typescript --project-id <id>`.
 
+## Application API
+
+The Next.js server exposes the following authenticated endpoints. Requests use
+the caller's Supabase session and database Row Level Security; attendance writes
+and leave decisions go through the database functions described in
+[`database-design.md`](database-design.md).
+
+| Method | Endpoint | Access | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/api/attendance` | Employee or administrator | Return scoped attendance history, active sites, and the caller profile |
+| `POST` | `/api/attendance` | Employee | Check in with a site ID and optional coordinates / request ID |
+| `PATCH` | `/api/attendance` | Employee | Check out with optional coordinates / request ID |
+| `GET` | `/api/leave` | Employee | List the caller's leave requests |
+| `POST` | `/api/leave` | Employee | Submit a sick-leave request (`startDate`, `endDate`, optional `reason`) |
+| `PATCH` | `/api/leave/{requestId}` | Employee | Cancel a pending request (`{"action":"cancel"}`) |
+| `GET` | `/api/admin/leave` | Administrator | List leave requests visible within the administrator's site scope |
+| `PATCH` | `/api/admin/leave/{requestId}` | Administrator | Approve or reject a pending request (`decision`, optional `note`) |
+
+Mutation routes require a same-origin JSON request. They validate input and
+return an `{ "error": "..." }` response with an appropriate HTTP status on
+failure. Secure document upload is still handled by Supabase Storage policies;
+the application upload flow and the manager, task, and incident features are
+not implemented.
+
 ## Not done yet
 
 The sign-in flow now uses Supabase Auth and the signed-in user's `profiles`
 row to route employees and administrators. Administrators can create sites and
 register employee accounts from the dashboard. The forgot-password page is
-still a demo, server-side route protection/session refresh has not been added,
-and attendance and leave dashboard content remains demo data. The database
-schema currently supports employee and administrator roles; the manager screen
-is not backed by a database role.
+still a demo, and server-side page route protection/session refresh has not
+been added. Employee attendance and leave submission, and administrator leave
+review, are available through the API above; other dashboard cards remain demo
+data. The database schema currently supports employee and administrator roles;
+the manager screen is not backed by a database role.
