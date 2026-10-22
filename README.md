@@ -27,8 +27,7 @@ PGHOST=localhost PGUSER=postgres PGPASSWORD=postgres tests/automated/run_db_test
 
 Foundation in place: schema, access control, check-in/out and leave functions,
 audit log, private document storage, Supabase clients, seed data and tests.
-The sign-in flow is implemented, and authenticated API routes now connect the
-employee attendance and leave workflows plus administrator leave review to the
-database. Still to build: server-side page route protection/session refresh,
-password reset, document upload, and the remaining dashboard features.
-Open decisions are listed in `docs/requirements.md` §9.
+Sign-in, password reset, session refresh, attendance, leave with document
+upload, tasks, incident reports, site rules, and the employee, site manager and
+administrator dashboards are implemented. Still to build: messaging, reports,
+late/no-check-in alerts, and enforcing working hours and network at check-in. Open decisions are listed in `docs/requirements.md` §9.

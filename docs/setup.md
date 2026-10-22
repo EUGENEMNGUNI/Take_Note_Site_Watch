@@ -120,20 +120,38 @@ and leave decisions go through the database functions described in
 | `PATCH` | `/api/leave/{requestId}` | Employee | Cancel a pending request (`{"action":"cancel"}`) |
 | `GET` | `/api/admin/leave` | Administrator | List leave requests visible within the administrator's site scope |
 | `PATCH` | `/api/admin/leave/{requestId}` | Administrator | Approve or reject a pending request (`decision`, optional `note`) |
+| `GET` | `/api/tasks` | Employee or manager | Tasks assigned to the caller (employee) or all tasks at the manager's site |
+| `POST` | `/api/tasks` | Manager | Create and assign a task (`assignedTo`, `title`, `priority`, optional `dueAt`) |
+| `PATCH` | `/api/tasks` | Employee or manager | Change a task's status (`taskId`, `status`) |
+| `GET` | `/api/incidents` | Employee or manager | Incidents the caller reported, or all at the manager's site |
+| `POST` | `/api/incidents` | Employee or manager | Report an incident (`category`, `priority`, `details`, optional `location`) |
+| `PATCH` | `/api/incidents` | Manager or administrator | Change an incident's status (`incidentId`, `status`) |
+| `GET` | `/api/manager/overview` | Manager | Site, staff, today's attendance and open alerts for the manager's site |
+| `GET` | `/api/admin/leave/{requestId}/documents` | Administrator | List a request's supporting documents with 5-minute signed URLs |
 
 Mutation routes require a same-origin JSON request. They validate input and
 return an `{ "error": "..." }` response with an appropriate HTTP status on
-failure. Secure document upload is still handled by Supabase Storage policies;
-the application upload flow and the manager, task, and incident features are
-not implemented.
+failure. Employees upload sick-leave documents straight to the private
+`leave-documents` bucket (Storage policies enforce ownership); the manager,
+task, and incident features are not implemented.
 
 ## Not done yet
 
-The sign-in flow now uses Supabase Auth and the signed-in user's `profiles`
-row to route employees and administrators. Administrators can create sites and
-register employee accounts from the dashboard. The forgot-password page is
-still a demo, and server-side page route protection/session refresh has not
-been added. Employee attendance and leave submission, and administrator leave
-review, are available through the API above; other dashboard cards remain demo
-data. The database schema currently supports employee and administrator roles;
-the manager screen is not backed by a database role.
+Implemented: sign-in, password reset (Supabase email one-time code), session
+refresh and redirect of signed-out visitors (`front-end/proxy.ts`), employee
+attendance, leave with document upload, tasks and incident reports;
+administrator leave review, site/staff creation (employees or site managers),
+site rules (radius, working hours, authorised network), live attendance counts
+and activity history; and the site manager dashboard, tasks and incidents.
+
+Notes and gaps:
+
+- The password-reset email template in Supabase must include `{{ .Token }}` so
+  the code is sent.
+- A manager is scoped to their own home site only. Managers can read people,
+  attendance and alerts there but cannot approve leave or acknowledge alerts.
+- The authorised network and working hours are stored and shown, but check-in
+  does not enforce them yet; site presence is still verified by the location
+  radius only (open decision, `requirements.md` §9).
+- Internal messaging (FR-14) is optional in the requirements and not built.
+  Reports and late/no-check-in alerts are also not built.

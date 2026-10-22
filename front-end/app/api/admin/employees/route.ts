@@ -30,6 +30,10 @@ export async function POST(request: Request) {
   const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
   const password = typeof body.password === "string" ? body.password : "";
   const homeSiteId = typeof body.homeSiteId === "string" ? body.homeSiteId : "";
+  const role = body.role === undefined ? "employee" : body.role;
+  if (role !== "employee" && role !== "manager") {
+    return Response.json({ error: "Role must be employee or manager." }, { status: 400 });
+  }
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
     return Response.json({ error: "Enter a valid employee email address." }, { status: 400 });
@@ -123,7 +127,7 @@ export async function POST(request: Request) {
 
   const { data: updatedProfile, error: updateError } = await admin
     .from("profiles")
-    .update({ full_name: fullName, role: "employee", home_site_id: homeSiteId, is_active: true })
+    .update({ full_name: fullName, role, home_site_id: homeSiteId, is_active: true })
     .eq("id", created.user.id)
     .select("id")
     .maybeSingle();
@@ -147,7 +151,7 @@ export async function POST(request: Request) {
   }
 
   return Response.json(
-    { employee: { id: created.user.id, email, fullName, homeSiteId } },
+    { employee: { id: created.user.id, email, fullName, homeSiteId, role } },
     { status: 201 },
   );
 }

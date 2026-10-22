@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { getAuthenticatedProfile, signOut, type UserRole } from "@/lib/auth";
+import { getAuthenticatedProfile, routeForRole, signOut, type UserRole } from "@/lib/auth";
 
 export function RoleGuard({
   allowedRoles,
@@ -35,7 +35,7 @@ export function RoleGuard({
           return;
         }
 
-        const roleRoute = profile.role === "admin" ? "/admin" : "/employee";
+        const roleRoute = routeForRole(profile.role);
         if (!allowedRoleKey.split(",").includes(profile.role)) {
           router.replace(roleRoute);
           return;

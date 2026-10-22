@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 import {
   getAuthenticatedProfile,
+  routeForRole,
   setStoredUserEmail,
 } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/browser";
@@ -32,7 +33,7 @@ export default function Home() {
           return;
         }
         setStoredUserEmail(profile.email);
-        router.replace(profile.role === "admin" ? "/admin" : "/employee");
+        router.replace(routeForRole(profile.role));
       })
       .catch(() => {
         if (active) {
@@ -101,7 +102,7 @@ export default function Home() {
       }
 
       setStoredUserEmail(profile.email || email);
-      router.replace(profile.role === "admin" ? "/admin" : "/employee");
+      router.replace(routeForRole(profile.role));
     } catch (error) {
       setMessage(
         error instanceof Error
