@@ -14,7 +14,7 @@ const SITE_DEPOT = "a0000000-0000-4000-8000-000000000002";
 type SeedUser = {
   email: string;
   fullName: string;
-  role: "admin" | "employee";
+  role: "admin" | "manager" | "employee";
   homeSiteId: string;
   /** Sites this user may administer (administrators only). */
   adminSiteIds: string[];
@@ -27,6 +27,13 @@ const USERS: SeedUser[] = [
     role: "admin",
     homeSiteId: SITE_HEAD_OFFICE,
     adminSiteIds: [SITE_HEAD_OFFICE, SITE_DEPOT],
+  },
+  {
+    email: "manager@sitewatch.test",
+    fullName: "Test Site Manager",
+    role: "manager",
+    homeSiteId: SITE_HEAD_OFFICE,
+    adminSiteIds: [],
   },
   {
     email: "employee1@sitewatch.test",

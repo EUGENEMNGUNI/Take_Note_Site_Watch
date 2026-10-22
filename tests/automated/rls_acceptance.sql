@@ -422,4 +422,98 @@ select t.raises($$delete from public.attendance$$, '42501');
 select t.raises(format($q$update public.attendance set check_out_at = now() where id = %L$q$, :'ci1'), '42501');
 select t.raises(format($q$update public.attendance set employee_id = '00000000-0000-4000-8000-0000000000e2' where id = %L$q$, :'ci2'), '42501');
 
+-- =============================================================================
+-- Site manager, tasks, incidents and site rules (0007, 0008)
+--   m1 manages site s1; m2 manages site s2.
+-- =============================================================================
+:as_super
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('00000000-0000-4000-8000-0000000000b1', 'mgr1@test.local', '{"full_name":"Manager One"}'),
+  ('00000000-0000-4000-8000-0000000000b2', 'mgr2@test.local', '{"full_name":"Manager Two"}');
+update public.profiles set role = 'manager', home_site_id = '11111111-1111-4111-8111-111111111111'
+ where id = '00000000-0000-4000-8000-0000000000b1';
+update public.profiles set role = 'manager', home_site_id = '22222222-2222-4222-8222-222222222222'
+ where id = '00000000-0000-4000-8000-0000000000b2';
+\set as_mgr1 'reset role; set request.jwt.claim.sub = ''00000000-0000-4000-8000-0000000000b1''; set role authenticated; '
+\set as_mgr2 'reset role; set request.jwt.claim.sub = ''00000000-0000-4000-8000-0000000000b2''; set role authenticated; '
+
+select t.assert((select work_start::text from public.sites where id = '11111111-1111-4111-8111-111111111111') = '08:00:00',
+  'sites default to an 08:00 start');
+select t.raises($$update public.sites set work_end = '07:00' where id = '11111111-1111-4111-8111-111111111111'$$, '23514');
+
+:as_mgr1
+select t.assert(public.is_manager(), 'manager is recognised');
+select t.assert(not public.is_admin(), 'manager is not an administrator');
+select t.assert((select count(*) from public.profiles) = 4,
+  'manager sees themselves and the three people at their own site');
+select t.assert((select count(*) from public.profiles where home_site_id = '22222222-2222-4222-8222-222222222222') = 0,
+  'manager cannot see people at another site');
+select t.assert(t.affected($$update public.sites set radius_m = 5000
+                             where id = '11111111-1111-4111-8111-111111111111'$$) = 0,
+  'manager cannot edit site rules');
+select t.raises($$select public.admin_set_user_role('00000000-0000-4000-8000-0000000000e1', 'admin')$$, '42501');
+select t.assert((select count(*) from public.audit_log) = 0, 'manager cannot read the audit log');
+
+-- tasks
+select t.raises($$insert into public.tasks (site_id, assigned_to, created_by, title)
+                  values ('11111111-1111-4111-8111-111111111111', '00000000-0000-4000-8000-0000000000e1',
+                          '00000000-0000-4000-8000-0000000000b1', 'direct')$$, '42501');
+select public.create_task('00000000-0000-4000-8000-0000000000e1', 'Inspect server room', 'high', now() + interval '4 hours');
+select t.assert((select count(*) from public.tasks where title = 'Inspect server room' and status = 'pending') = 1,
+  'manager creates a task for an employee at their site');
+select t.raises($$select public.create_task('00000000-0000-4000-8000-0000000000e3', 'Wrong site', 'low')$$, '42501');
+select t.raises($$select public.create_task('00000000-0000-4000-8000-0000000000e1', '   ', 'low')$$, '22023');
+select t.raises($$select public.create_task('00000000-0000-4000-8000-0000000000a1', 'Admin is not an employee', 'low')$$, '42501');
+
+:as_emp1
+select t.assert((select count(*) from public.tasks) = 1, 'employee sees the task assigned to them');
+select t.raises($$select public.create_task('00000000-0000-4000-8000-0000000000e1', 'Self assigned', 'low')$$, '42501');
+select t.assert((select (public.set_task_status((select id from public.tasks limit 1), 'in_progress')).status) = 'in_progress',
+  'assignee can start their task');
+select t.assert((select (public.set_task_status((select id from public.tasks limit 1), 'done')).completed_at) is not null,
+  'completing a task stamps completed_at');
+
+:as_emp2
+select t.assert((select count(*) from public.tasks) = 0, 'other employees cannot see the task');
+select t.raises($$select public.set_task_status((select id from public.tasks limit 1), 'done')$$, 'P0002');
+
+:as_mgr2
+select t.assert((select count(*) from public.tasks) = 0, 'manager of another site cannot see the task');
+
+-- incidents
+:as_emp1
+select public.report_incident('hazard', 'high', 'Water leak in Bay 3', 'Warehouse');
+select t.assert((select count(*) from public.incidents) = 1, 'employee reports an incident');
+select t.raises($$select public.report_incident('hazard', 'low', '   ')$$, '22023');
+select t.raises($$insert into public.incidents (site_id, reported_by, category, details)
+                  values ('11111111-1111-4111-8111-111111111111', '00000000-0000-4000-8000-0000000000e1', 'hazard', 'x')$$, '42501');
+select t.raises($$select public.set_incident_status((select id from public.incidents limit 1), 'resolved')$$, '42501');
+
+:as_emp2
+select t.assert((select count(*) from public.incidents) = 0, 'employees only see incidents they reported');
+
+:as_mgr1
+select t.assert((select count(*) from public.incidents) = 1, 'manager sees incidents at their site');
+select t.assert((select (public.set_incident_status((select id from public.incidents limit 1), 'investigating')).status) = 'investigating',
+  'manager updates an incident status');
+
+:as_mgr2
+select t.assert((select count(*) from public.incidents) = 0, 'manager of another site cannot see the incident');
+select t.raises($$select public.set_incident_status((select id from public.incidents limit 1), 'resolved')$$, 'P0002');
+
+:as_admin1
+select t.assert((select count(*) from public.tasks) = 1 and (select count(*) from public.incidents) = 1,
+  'scoped administrator can read tasks and incidents');
+select t.assert(t.affected($$update public.sites set work_start = '07:30', authorised_network = 'Office Wi-Fi'
+                             where id = '11111111-1111-4111-8111-111111111111'$$) = 1,
+  'scoped administrator can edit site working rules');
+select t.assert((select count(*) from public.audit_log where action in
+  ('task.created', 'task.status_changed', 'incident.reported', 'incident.status_changed')) = 5,
+  'task and incident actions are audited');
+
+:as_admin2
+select t.assert((select count(*) from public.tasks) = 0 and (select count(*) from public.incidents) = 0,
+  'administrator of another site cannot read them');
+
+:as_super
 select 'ALL DATABASE TESTS PASSED' as result;

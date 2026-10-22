@@ -40,6 +40,22 @@ type LeaveRequest = {
   decision_note: string | null;
 };
 
+type TaskRecord = {
+  id: string;
+  title: string;
+  priority: "low" | "medium" | "high";
+  status: "pending" | "in_progress" | "done";
+  due_at: string | null;
+  completed_at: string | null;
+};
+
+const PRIORITY_PILL: Record<TaskRecord["priority"], string> = { high: "red", medium: "amber", low: "blue" };
+const STATUS_LABEL: Record<TaskRecord["status"], string> = {
+  pending: "Pending",
+  in_progress: "In progress",
+  done: "Done",
+};
+
 export default function EmployeePage() {
   const router = useRouter();
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -52,6 +68,11 @@ export default function EmployeePage() {
   const [leaveMessage, setLeaveMessage] = useState("");
   const [leaveError, setLeaveError] = useState("");
   const [isSavingLeave, setIsSavingLeave] = useState(false);
+  const [tasks, setTasks] = useState<TaskRecord[]>([]);
+  const [taskError, setTaskError] = useState("");
+  const [incidentMessage, setIncidentMessage] = useState("");
+  const [incidentError, setIncidentError] = useState("");
+  const [isSavingIncident, setIsSavingIncident] = useState(false);
   const [displayName, setDisplayName] = useState("Employee");
   const [signOutMessage, setSignOutMessage] = useState("");
   const checkInRequestId = useRef<string | null>(null);
@@ -87,6 +108,69 @@ export default function EmployeePage() {
     }
     setLeaveRequests(result.leaveRequests ?? []);
   }, []);
+
+  const refreshTasks = useCallback(async () => {
+    const response = await fetch("/api/tasks");
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error ?? "Could not load tasks.");
+    }
+    setTasks(result.tasks ?? []);
+    setTaskError("");
+  }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(refreshTasks).catch((error: unknown) => {
+      setTaskError(error instanceof Error ? error.message : "Could not load tasks.");
+    });
+  }, [refreshTasks]);
+
+  const handleTaskStatus = async (taskId: string, status: TaskRecord["status"]) => {
+    setTaskError("");
+    try {
+      const response = await fetch("/api/tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId, status }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Task could not be updated.");
+      await refreshTasks();
+    } catch (error) {
+      setTaskError(error instanceof Error ? error.message : "Task could not be updated.");
+    }
+  };
+
+  const handleIncidentSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSavingIncident) return;
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    setIsSavingIncident(true);
+    setIncidentMessage("");
+    setIncidentError("");
+
+    try {
+      const response = await fetch("/api/incidents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: formData.get("category"),
+          priority: formData.get("priority"),
+          location: formData.get("location"),
+          details: formData.get("details"),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Report could not be submitted.");
+      form.reset();
+      setIncidentMessage("Report submitted. Your site manager can now see it.");
+    } catch (error) {
+      setIncidentError(error instanceof Error ? error.message : "Report could not be submitted.");
+    } finally {
+      setIsSavingIncident(false);
+    }
+  };
 
   useEffect(() => {
     void Promise.resolve().then(refreshAttendance).catch((error: unknown) => {
@@ -378,30 +462,38 @@ export default function EmployeePage() {
 
             <div className="card">
               <h2>
-                My tasks today
-                <span className="small" style={{ marginLeft: 12 }}>3 open</span>
+                My tasks
+                <span className="small" style={{ marginLeft: 12 }}>
+                  {tasks.filter((task) => task.status !== "done").length} open
+                </span>
               </h2>
-
-              <div className="task">
-                Inspect server room
-                <span className="pill red" style={{ float: "right" }}>High</span>
-                <br />
-                <span className="small">Due 14:00 · Pending</span>
-              </div>
-
-              <div className="task">
-                Check extinguisher tags, Bay 1
-                <span className="pill amber" style={{ float: "right" }}>Medium</span>
-                <br />
-                <span className="small">Due 15:30 · In progress</span>
-              </div>
-
-              <div className="task done">
-                <b>Morning equipment check</b>
-                <span className="pill green" style={{ float: "right" }}>Done</span>
-                <br />
-                <span className="small">Completed 09:10</span>
-              </div>
+              {taskError ? <p className="message error" role="alert">{taskError}</p> : null}
+              {tasks.map((task) => (
+                <div className={`task${task.status === "done" ? " done" : ""}`} key={task.id}>
+                  {task.status === "done" ? <b>{task.title}</b> : task.title}
+                  <span className={`pill ${PRIORITY_PILL[task.priority]}`} style={{ float: "right" }}>
+                    {task.priority}
+                  </span>
+                  <br />
+                  <span className="small">
+                    {task.due_at ? `Due ${new Date(task.due_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })} · ` : ""}
+                    {STATUS_LABEL[task.status]}
+                  </span>
+                  {task.status !== "done" ? (
+                    <div style={{ marginTop: 6 }}>
+                      {task.status === "pending" ? (
+                        <button type="button" className="link-button" onClick={() => void handleTaskStatus(task.id, "in_progress")}>
+                          Start
+                        </button>
+                      ) : null}
+                      <button type="button" className="link-button" style={{ marginLeft: 10 }} onClick={() => void handleTaskStatus(task.id, "done")}>
+                        Mark done
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+              {tasks.length === 0 && !taskError ? <p className="small">No tasks assigned to you.</p> : null}
             </div>
           </div>
 
@@ -449,25 +541,34 @@ export default function EmployeePage() {
 
             <div className="card" id="report">
               <h2>Report an incident</h2>
-              <p className="small">Your Site Manager is notified as soon as you submit.</p>
+              <p className="small">Your Site Manager can see it as soon as you submit.</p>
 
-              <label>What happened</label>
-              <select>
-                <option>Hazard</option>
-                <option>Accident</option>
-              </select>
+              <form onSubmit={handleIncidentSubmit}>
+                <label htmlFor="incident-category">What happened</label>
+                <select id="incident-category" name="category" defaultValue="hazard">
+                  <option value="hazard">Hazard</option>
+                  <option value="accident">Accident</option>
+                </select>
 
-              <label>Priority</label>
-              <select>
-                <option>Low</option>
-                <option>Medium</option>
-                <option>High</option>
-              </select>
+                <label htmlFor="incident-priority">Priority</label>
+                <select id="incident-priority" name="priority" defaultValue="medium">
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
 
-              <label>Details</label>
-              <textarea rows={3} placeholder="Describe the hazard or accident" />
-              <br />
-              <button className="btn">Submit report</button>
+                <label htmlFor="incident-location">Location (optional)</label>
+                <input id="incident-location" name="location" maxLength={200} placeholder="e.g. Bay 3" />
+
+                <label htmlFor="incident-details">Details</label>
+                <textarea id="incident-details" name="details" rows={3} required maxLength={2000} placeholder="Describe the hazard or accident" />
+                <br />
+                <button className="btn" type="submit" disabled={isSavingIncident}>
+                  {isSavingIncident ? "Submitting..." : "Submit report"}
+                </button>
+              </form>
+              {incidentMessage ? <p className="message-box success" role="status">{incidentMessage}</p> : null}
+              {incidentError ? <p className="message-box error" role="alert">{incidentError}</p> : null}
             </div>
           </div>
         </main>

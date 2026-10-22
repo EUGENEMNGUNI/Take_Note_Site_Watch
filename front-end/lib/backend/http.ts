@@ -4,7 +4,7 @@ import type { User } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/server";
 
-export type AppRole = "employee" | "admin";
+export type AppRole = "employee" | "manager" | "admin";
 
 export type ApiUserContext = {
   supabase: Awaited<ReturnType<typeof createClient>>;
@@ -53,7 +53,7 @@ export async function requireApiUser(
   if (profileError) {
     throw new ApiError(`Could not load your account profile: ${profileError.message}`, 500);
   }
-  if (!profile || (profile.role !== "employee" && profile.role !== "admin")) {
+  if (!profile || (profile.role !== "employee" && profile.role !== "manager" && profile.role !== "admin")) {
     throw new ApiError("Your account profile is missing or has an unsupported role.", 403);
   }
   if (!profile.is_active) {

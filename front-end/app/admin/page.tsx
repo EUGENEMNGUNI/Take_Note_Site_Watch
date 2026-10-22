@@ -15,13 +15,16 @@ type SiteRecord = {
   longitude: number;
   radius_m: number;
   is_active: boolean;
+  work_start: string;
+  work_end: string;
+  authorised_network: string | null;
 };
 
 type EmployeeRecord = {
   id: string;
   email: string | null;
   full_name: string;
-  role: "employee" | "admin";
+  role: "employee" | "manager" | "admin";
   home_site_id: string | null;
   is_active: boolean;
 };
@@ -73,6 +76,14 @@ const describeAction = (action: string) =>
 export default function AdminPage() {
   const router = useRouter();
   const [radius, setRadius] = useState(200);
+  const [ruleSiteId, setRuleSiteId] = useState("");
+  const [ruleStart, setRuleStart] = useState("08:00");
+  const [ruleEnd, setRuleEnd] = useState("17:00");
+  const [ruleNetwork, setRuleNetwork] = useState("");
+  const [ruleMessage, setRuleMessage] = useState("");
+  const [ruleMessageType, setRuleMessageType] = useState<"error" | "success">("success");
+  const [isSavingRules, setIsSavingRules] = useState(false);
+  const [openIncidents, setOpenIncidents] = useState(0);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("Admin");
   const [signOutMessage, setSignOutMessage] = useState("");
@@ -106,12 +117,12 @@ export default function AdminPage() {
       const [sitesResult, employeesResult] = await Promise.all([
         supabase
           .from("sites")
-          .select("id, name, address, latitude, longitude, radius_m, is_active")
+          .select("id, name, address, latitude, longitude, radius_m, is_active, work_start, work_end, authorised_network")
           .order("name"),
         supabase
           .from("profiles")
           .select("id, email, full_name, role, home_site_id, is_active")
-          .eq("role", "employee")
+          .in("role", ["employee", "manager"])
           .order("full_name"),
       ]);
 
@@ -154,6 +165,12 @@ export default function AdminPage() {
       ]);
       if (openResult.error) throw openResult.error;
       if (leaveResult.error) throw leaveResult.error;
+
+      const incidentResult = await supabase
+        .from("incidents")
+        .select("id", { count: "exact", head: true })
+        .neq("status", "resolved");
+      if (!incidentResult.error) setOpenIncidents(incidentResult.count ?? 0);
 
       setTodayStats({
         checkedIn: new Set(openResult.data.map((row) => row.employee_id)).size,
@@ -293,6 +310,7 @@ export default function AdminPage() {
           email: String(formData.get("email") ?? ""),
           password: String(formData.get("password") ?? ""),
           homeSiteId: String(formData.get("home_site_id") ?? ""),
+          role: String(formData.get("role") ?? "employee"),
         }),
       });
       const result: { error?: string } = await response.json();
@@ -353,6 +371,59 @@ export default function AdminPage() {
       leaveEmployees.find((employee) => employee.id === actorId)?.full_name ||
       (actorId === currentUserId ? displayName : "Administrator")
     );
+  };
+
+  const selectRuleSite = (siteId: string) => {
+    setRuleSiteId(siteId);
+    setRuleMessage("");
+    const selected = sites.find((item) => item.id === siteId);
+    if (!selected) return;
+    setRadius(selected.radius_m);
+    setRuleStart(selected.work_start.slice(0, 5));
+    setRuleEnd(selected.work_end.slice(0, 5));
+    setRuleNetwork(selected.authorised_network ?? "");
+  };
+
+  const handleSaveRules = async () => {
+    if (isSavingRules || !ruleSiteId) return;
+    if (ruleEnd <= ruleStart) {
+      setRuleMessage("Work end must be later than work start.");
+      setRuleMessageType("error");
+      return;
+    }
+    setIsSavingRules(true);
+    setRuleMessage("");
+    try {
+      const { data, error } = await createClient()
+        .from("sites")
+        .update({
+          radius_m: radius,
+          work_start: ruleStart,
+          work_end: ruleEnd,
+          authorised_network: ruleNetwork.trim() || null,
+        })
+        .eq("id", ruleSiteId)
+        .select("id");
+      if (error) {
+        setRuleMessage(error.message);
+        setRuleMessageType("error");
+        return;
+      }
+      if (!data || data.length === 0) {
+        setRuleMessage("You do not have permission to change this site.");
+        setRuleMessageType("error");
+        return;
+      }
+      setRuleMessage("Site rules saved.");
+      setRuleMessageType("success");
+      await refreshDirectory();
+      void refreshActivity();
+    } catch (caught) {
+      setRuleMessage(caught instanceof Error ? caught.message : "Could not save site rules.");
+      setRuleMessageType("error");
+    } finally {
+      setIsSavingRules(false);
+    }
   };
 
   const updateRadius = (value: number) => setRadius(value);
@@ -466,6 +537,13 @@ export default function AdminPage() {
                     <input id="employee-password" name="password" type="password" required minLength={12} maxLength={72} autoComplete="new-password" />
                   </div>
                   <div>
+                    <label htmlFor="employee-role">Role</label>
+                    <select id="employee-role" name="role" defaultValue="employee">
+                      <option value="employee">Employee</option>
+                      <option value="manager">Site manager</option>
+                    </select>
+                  </div>
+                  <div>
                     <label htmlFor="employee-site">Home site</label>
                     <select id="employee-site" name="home_site_id" required defaultValue="">
                       <option value="" disabled>Select a site</option>
@@ -492,11 +570,12 @@ export default function AdminPage() {
         ) : null}
 
         <div className="stats">
-          <div className="stat"><b>{employees.length}</b>Total employees in your site scope</div>
+          <div className="stat"><b>{employees.length}</b>Total staff in your site scope</div>
           <div className="stat"><b className="green">{todayStats.checkedIn}</b>Checked in</div>
-          <div className="stat"><b>{Math.max(0, employees.length - todayStats.checkedIn - todayStats.onLeave)}</b>Not checked in</div>
+          <div className="stat"><b>{Math.max(0, employees.filter((person) => person.role === "employee").length - todayStats.checkedIn - todayStats.onLeave)}</b>Not checked in</div>
           <div className="stat"><b style={{ color: "#9a1b1b" }}>{todayStats.outside}</b>Outside site</div>
           <div className="stat"><b style={{ color: "#1e4fa0" }}>{todayStats.onLeave}</b>On leave</div>
+          <div className="stat"><b style={{ color: "#9a1b1b" }}>{openIncidents}</b>Open incidents</div>
         </div>
 
         <div className="grid2" style={{ gridTemplateColumns: "1.2fr 1fr" }}>
@@ -530,37 +609,45 @@ export default function AdminPage() {
           </div>
 
           <div className="card">
-            <h2>
-              Site rules
-              <span className="small">Company Headquarters</span>
-            </h2>
+            <h2>Site rules</h2>
 
-            <label>
-              Site radius:
-              <span id="radiusText">{radius}</span> m
+            <label htmlFor="rules-site">Site</label>
+            <select id="rules-site" value={ruleSiteId} onChange={(e) => selectRuleSite(e.target.value)}>
+              <option value="" disabled>Select a site</option>
+              {sites.map((site) => (
+                <option key={site.id} value={site.id}>{site.name}</option>
+              ))}
+            </select>
+
+            <label htmlFor="rules-radius">
+              Site radius: <span id="radiusText">{radius}</span> m
             </label>
-
-            <input type="range" min={50} max={500} value={radius} onChange={(e) => updateRadius(Number(e.target.value))} />
+            <input id="rules-radius" type="range" min={50} max={500} value={radius} onChange={(e) => updateRadius(Number(e.target.value))} />
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
-                <label>Work starts</label>
-                <input type="time" defaultValue="08:00" />
+                <label htmlFor="rules-start">Work starts</label>
+                <input id="rules-start" type="time" value={ruleStart} onChange={(e) => setRuleStart(e.target.value)} />
               </div>
               <div>
-                <label>Work ends</label>
-                <input type="time" defaultValue="17:00" />
+                <label htmlFor="rules-end">Work ends</label>
+                <input id="rules-end" type="time" value={ruleEnd} onChange={(e) => setRuleEnd(e.target.value)} />
               </div>
             </div>
 
-            <label>Authorised network</label>
-            <input defaultValue="Company Wi-Fi" />
+            <label htmlFor="rules-network">Authorised network</label>
+            <input id="rules-network" value={ruleNetwork} maxLength={200} onChange={(e) => setRuleNetwork(e.target.value)} placeholder="e.g. Company Wi-Fi" />
 
             <p className="small" style={{ margin: "8px 0 14px" }}>
-              Location is monitored only between the start and end times above.
+              Working hours and network are recorded for the site. Location is only requested at check-in.
             </p>
 
-            <button className="btn">Save site rules</button>
+            <button className="btn" type="button" onClick={() => void handleSaveRules()} disabled={isSavingRules || !ruleSiteId}>
+              {isSavingRules ? "Saving..." : "Save site rules"}
+            </button>
+            {ruleMessage ? (
+              <p className={`message-box ${ruleMessageType}`} role={ruleMessageType === "error" ? "alert" : "status"}>{ruleMessage}</p>
+            ) : null}
           </div>
         </div>
 
@@ -571,6 +658,7 @@ export default function AdminPage() {
               <tr>
                 <th>Name</th>
                 <th>Email</th>
+                <th>Role</th>
                 <th>Home site</th>
                 <th>Status</th>
               </tr>
@@ -580,12 +668,13 @@ export default function AdminPage() {
                 <tr key={employee.id}>
                   <td>{employee.full_name || "—"}</td>
                   <td>{employee.email || "—"}</td>
+                  <td>{employee.role === "manager" ? "Site manager" : "Employee"}</td>
                   <td>{sites.find((site) => site.id === employee.home_site_id)?.name ?? "Unassigned"}</td>
                   <td><span className={`pill ${employee.is_active ? "green" : "grey"}`}>{employee.is_active ? "Active" : "Inactive"}</span></td>
                 </tr>
               ))}
               {employees.length === 0 ? (
-                <tr><td colSpan={4}>{directoryError ? "Employees could not be loaded." : "No employees found."}</td></tr>
+                <tr><td colSpan={5}>{directoryError ? "Employees could not be loaded." : "No employees found."}</td></tr>
               ) : null}
             </tbody>
           </table>

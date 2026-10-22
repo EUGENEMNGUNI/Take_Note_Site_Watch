@@ -1,7 +1,13 @@
 import { createClient } from "@/lib/supabase/browser";
 
 export type UserRole = "employee" | "manager" | "admin";
-export type DatabaseUserRole = Exclude<UserRole, "manager">;
+export type DatabaseUserRole = UserRole;
+
+export function routeForRole(role: UserRole): string {
+  if (role === "admin") return "/admin";
+  if (role === "manager") return "/manager";
+  return "/employee";
+}
 
 const USER_KEY = "siteWatchUser";
 
@@ -36,7 +42,7 @@ export async function getAuthenticatedProfile(): Promise<AuthenticatedProfile | 
     throw profileError;
   }
 
-  if (!profile || (profile.role !== "employee" && profile.role !== "admin")) {
+  if (!profile || (profile.role !== "employee" && profile.role !== "manager" && profile.role !== "admin")) {
     throw new Error("Your account profile is missing or has an unsupported role.");
   }
 

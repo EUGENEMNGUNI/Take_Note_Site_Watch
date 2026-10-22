@@ -120,6 +120,13 @@ and leave decisions go through the database functions described in
 | `PATCH` | `/api/leave/{requestId}` | Employee | Cancel a pending request (`{"action":"cancel"}`) |
 | `GET` | `/api/admin/leave` | Administrator | List leave requests visible within the administrator's site scope |
 | `PATCH` | `/api/admin/leave/{requestId}` | Administrator | Approve or reject a pending request (`decision`, optional `note`) |
+| `GET` | `/api/tasks` | Employee or manager | Tasks assigned to the caller (employee) or all tasks at the manager's site |
+| `POST` | `/api/tasks` | Manager | Create and assign a task (`assignedTo`, `title`, `priority`, optional `dueAt`) |
+| `PATCH` | `/api/tasks` | Employee or manager | Change a task's status (`taskId`, `status`) |
+| `GET` | `/api/incidents` | Employee or manager | Incidents the caller reported, or all at the manager's site |
+| `POST` | `/api/incidents` | Employee or manager | Report an incident (`category`, `priority`, `details`, optional `location`) |
+| `PATCH` | `/api/incidents` | Manager or administrator | Change an incident's status (`incidentId`, `status`) |
+| `GET` | `/api/manager/overview` | Manager | Site, staff, today's attendance and open alerts for the manager's site |
 | `GET` | `/api/admin/leave/{requestId}/documents` | Administrator | List a request's supporting documents with 5-minute signed URLs |
 
 Mutation routes require a same-origin JSON request. They validate input and
@@ -130,12 +137,21 @@ task, and incident features are not implemented.
 
 ## Not done yet
 
-Sign-in, password reset (Supabase email one-time code), session refresh and
-redirect of signed-out visitors (`front-end/proxy.ts`), employee attendance and
-leave with document upload, and administrator leave review, site/employee
-creation, live attendance counts and activity history are implemented. The
-password-reset email must be configured in Supabase (the template has to
-include the `{{ .Token }}` code). Still demo data: employee tasks, incident
-reports, the manager screen, and the "Site rules" card (work hours and network
-have no schema yet). The database schema supports employee and administrator
-roles only.
+Implemented: sign-in, password reset (Supabase email one-time code), session
+refresh and redirect of signed-out visitors (`front-end/proxy.ts`), employee
+attendance, leave with document upload, tasks and incident reports;
+administrator leave review, site/staff creation (employees or site managers),
+site rules (radius, working hours, authorised network), live attendance counts
+and activity history; and the site manager dashboard, tasks and incidents.
+
+Notes and gaps:
+
+- The password-reset email template in Supabase must include `{{ .Token }}` so
+  the code is sent.
+- A manager is scoped to their own home site only. Managers can read people,
+  attendance and alerts there but cannot approve leave or acknowledge alerts.
+- The authorised network and working hours are stored and shown, but check-in
+  does not enforce them yet; site presence is still verified by the location
+  radius only (open decision, `requirements.md` §9).
+- Internal messaging (FR-14) is optional in the requirements and not built.
+  Reports and late/no-check-in alerts are also not built.
