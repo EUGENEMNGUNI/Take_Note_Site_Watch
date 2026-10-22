@@ -5,6 +5,10 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { getStoredUserEmail, signOut } from "@/lib/auth";
 import { RoleGuard } from "@/components/role-guard";
+import { createClient } from "@/lib/supabase/browser";
+
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_DOCUMENT_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 
 type SiteRecord = {
   id: string;
@@ -176,14 +180,53 @@ export default function EmployeePage() {
     }
   };
 
+  const uploadLeaveDocument = async (leaveRequestId: string, file: File) => {
+    const supabase = createClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) throw new Error("Your session has expired. Sign in again.");
+
+    const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "_").slice(-100) || "document";
+    const storagePath = `${user.id}/${leaveRequestId}/${crypto.randomUUID()}-${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("leave-documents")
+      .upload(storagePath, file, { contentType: file.type, upsert: false });
+    if (uploadError) throw uploadError;
+
+    const { error: insertError } = await supabase.from("leave_documents").insert({
+      leave_request_id: leaveRequestId,
+      employee_id: user.id,
+      storage_path: storagePath,
+      file_name: file.name.slice(0, 200),
+      mime_type: file.type,
+      size_bytes: file.size,
+    });
+    if (insertError) throw insertError;
+  };
+
   const handleLeaveSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSavingLeave) return;
     const form = event.currentTarget;
     const formData = new FormData(form);
-    setIsSavingLeave(true);
+    const fileValue = formData.get("document");
+    const document = fileValue instanceof File && fileValue.size > 0 ? fileValue : null;
     setLeaveMessage("");
     setLeaveError("");
+    if (document) {
+      if (!ALLOWED_DOCUMENT_TYPES.includes(document.type)) {
+        setLeaveError("Documents must be a PDF, JPEG or PNG file.");
+        return;
+      }
+      if (document.size > MAX_DOCUMENT_BYTES) {
+        setLeaveError("Documents must be 10 MB or smaller.");
+        return;
+      }
+    }
+    setIsSavingLeave(true);
 
     try {
       const response = await fetch("/api/leave", {
@@ -200,8 +243,25 @@ export default function EmployeePage() {
         throw new Error(result.error ?? "Leave request could not be submitted.");
       }
 
+      let documentWarning = "";
+      if (document) {
+        try {
+          await uploadLeaveDocument(result.leaveRequest.id, document);
+        } catch (uploadError) {
+          documentWarning = ` The request was saved, but the document was not uploaded: ${
+            uploadError instanceof Error ? uploadError.message : "upload failed"
+          }`;
+        }
+      }
+
       form.reset();
-      setLeaveMessage("Sick-leave request submitted.");
+      if (documentWarning) {
+        setLeaveError(documentWarning.trim());
+      } else {
+        setLeaveMessage(
+          document ? "Sick-leave request and document submitted." : "Sick-leave request submitted.",
+        );
+      }
       await refreshLeaveRequests();
     } catch (error) {
       setLeaveError(
@@ -359,7 +419,9 @@ export default function EmployeePage() {
                 <label htmlFor="leave-reason">Reason</label>
                 <textarea id="leave-reason" name="reason" rows={2} maxLength={2000} placeholder="Briefly describe the reason" />
 
-                <p className="small">Supporting document upload is not available yet.</p>
+                <label htmlFor="leave-document">Supporting document (optional)</label>
+                <input id="leave-document" name="document" type="file" accept="application/pdf,image/jpeg,image/png" />
+                <p className="small">PDF, JPEG or PNG, up to 10 MB. Stored privately.</p>
                 <button className="btn" type="submit" disabled={isSavingLeave}>
                   {isSavingLeave ? "Submitting..." : "Submit request"}
                 </button>

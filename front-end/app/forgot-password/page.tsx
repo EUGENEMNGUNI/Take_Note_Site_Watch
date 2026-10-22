@@ -3,34 +3,109 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { createClient } from "@/lib/supabase/browser";
+
 export default function ForgotPasswordPage() {
   const [step, setStep] = useState<"request" | "otp" | "reset" | "done">("request");
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"error" | "success" | "">("");
-  const [email, setEmail] = useState("thabo@company.co.za");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isBusy, setIsBusy] = useState(false);
 
-  const handleRequestReset = () => {
+  const fail = (text: string) => {
+    setMessage(text);
+    setMessageType("error");
+  };
+  const succeed = (text: string) => {
+    setMessage(text);
+    setMessageType("success");
+  };
+
+  const handleRequestReset = async () => {
+    if (isBusy) return;
     if (!email.trim()) {
-      setMessage("Please enter your work email.");
-      setMessageType("error");
+      fail("Please enter your work email.");
       return;
     }
 
-    setMessage(`A one-time code has been sent to ${email}.`);
-    setMessageType("success");
-    setStep("otp");
+    setIsBusy(true);
+    try {
+      const { error } = await createClient().auth.resetPasswordForEmail(email.trim());
+      if (error) {
+        fail(error.message);
+        return;
+      }
+      // Same wording whether or not the account exists, so the form cannot be
+      // used to discover which emails are registered.
+      succeed(`If an account exists for ${email.trim()}, a one-time code has been sent.`);
+      setStep("otp");
+    } catch (error) {
+      fail(error instanceof Error ? error.message : "Could not send the reset code.");
+    } finally {
+      setIsBusy(false);
+    }
   };
 
-  const handleVerifyOtp = () => {
-    setMessage("Code accepted. Set a new password to continue.");
-    setMessageType("success");
-    setStep("reset");
+  const handleVerifyOtp = async () => {
+    if (isBusy) return;
+    if (!/^\d{6,10}$/.test(code.trim())) {
+      fail("Enter the numeric code from your email.");
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const { error } = await createClient().auth.verifyOtp({
+        email: email.trim(),
+        token: code.trim(),
+        type: "recovery",
+      });
+      if (error) {
+        fail(error.message);
+        return;
+      }
+      succeed("Code accepted. Set a new password to continue.");
+      setStep("reset");
+    } catch (error) {
+      fail(error instanceof Error ? error.message : "Could not verify the code.");
+    } finally {
+      setIsBusy(false);
+    }
   };
 
-  const handleResetPassword = () => {
-    setMessage("Your password has been updated successfully.");
-    setMessageType("success");
-    setStep("done");
+  const handleResetPassword = async () => {
+    if (isBusy) return;
+    if (newPassword.length < 8 || !/\d/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+      fail("Use at least 8 characters, including a number and a symbol.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      fail("The two passwords do not match.");
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        fail(error.message);
+        return;
+      }
+      // Require a fresh sign-in with the new password.
+      await supabase.auth.signOut();
+      setNewPassword("");
+      setConfirmPassword("");
+      succeed("Your password has been updated successfully.");
+      setStep("done");
+    } catch (error) {
+      fail(error instanceof Error ? error.message : "Could not update the password.");
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   return (
@@ -58,8 +133,8 @@ export default function ForgotPasswordPage() {
               placeholder="name@company.co.za"
             />
 
-            <button className="btn" style={{ width: "100%", marginTop: 18 }} onClick={handleRequestReset}>
-              Send reset code
+            <button className="btn" style={{ width: "100%", marginTop: 18 }} onClick={() => void handleRequestReset()} disabled={isBusy}>
+              {isBusy ? "Sending..." : "Send reset code"}
             </button>
 
             {message ? <div className={`message-box ${messageType}`}>{message}</div> : null}
@@ -78,10 +153,10 @@ export default function ForgotPasswordPage() {
               Enter the code sent to <span className="email-display">{email}</span>
             </p>
 
-            <input className="otp-input" defaultValue="4826" maxLength={4} />
+            <input className="otp-input" value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" maxLength={10} aria-label="One-time code" />
 
-            <button className="btn" style={{ width: "100%", marginTop: 18 }} onClick={handleVerifyOtp}>
-              Verify code
+            <button className="btn" style={{ width: "100%", marginTop: 18 }} onClick={() => void handleVerifyOtp()} disabled={isBusy}>
+              {isBusy ? "Verifying..." : "Verify code"}
             </button>
 
             {message ? <div className={`message-box ${messageType}`}>{message}</div> : null}
@@ -97,15 +172,15 @@ export default function ForgotPasswordPage() {
             </div>
 
             <label htmlFor="newPassword">New password</label>
-            <input id="newPassword" type="password" placeholder="Enter a new password" />
+            <input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" placeholder="Enter a new password" />
 
             <label htmlFor="confirmPassword">Confirm password</label>
-            <input id="confirmPassword" type="password" placeholder="Confirm your password" />
+            <input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" placeholder="Confirm your password" />
 
             <div className="password-help">Use at least 8 characters, including a number and a symbol.</div>
 
-            <button className="btn" style={{ width: "100%", marginTop: 18 }} onClick={handleResetPassword}>
-              Update password
+            <button className="btn" style={{ width: "100%", marginTop: 18 }} onClick={() => void handleResetPassword()} disabled={isBusy}>
+              {isBusy ? "Updating..." : "Update password"}
             </button>
 
             {message ? <div className={`message-box ${messageType}`}>{message}</div> : null}

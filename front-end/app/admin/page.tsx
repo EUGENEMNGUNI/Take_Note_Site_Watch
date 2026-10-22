@@ -44,9 +44,36 @@ type LeaveEmployeeRecord = {
   email: string | null;
 };
 
+type ActivityRecord = {
+  id: number;
+  actor_id: string | null;
+  action: string;
+  entity_type: string;
+  created_at: string;
+};
+
+type DocumentLink = { id: string; fileName: string; url: string };
+
+const ACTION_LABELS: Record<string, string> = {
+  "user.role_changed": "Changed a user role",
+  "user.activated": "Activated a user",
+  "user.deactivated": "Deactivated a user",
+  "user.home_site_changed": "Changed a user's home site",
+  "site.created": "Created a site",
+  "site.updated": "Updated a site",
+  "site.activated": "Activated a site",
+  "site.deactivated": "Deactivated a site",
+  "admin_scope.granted": "Granted administrator site access",
+  "admin_scope.revoked": "Revoked administrator site access",
+};
+
+const describeAction = (action: string) =>
+  ACTION_LABELS[action] ?? action.replace(/[._]/g, " ");
+
 export default function AdminPage() {
   const router = useRouter();
   const [radius, setRadius] = useState(200);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("Admin");
   const [signOutMessage, setSignOutMessage] = useState("");
   const [sites, setSites] = useState<SiteRecord[]>([]);
@@ -57,6 +84,10 @@ export default function AdminPage() {
   const [leaveMessage, setLeaveMessage] = useState("");
   const [processingLeaveId, setProcessingLeaveId] = useState<string | null>(null);
   const [directoryError, setDirectoryError] = useState("");
+  const [todayStats, setTodayStats] = useState({ checkedIn: 0, outside: 0, onLeave: 0 });
+  const [activity, setActivity] = useState<ActivityRecord[]>([]);
+  const [activityError, setActivityError] = useState("");
+  const [documentLinks, setDocumentLinks] = useState<Record<string, DocumentLink[] | "loading" | "error">>({});
   const [formMessage, setFormMessage] = useState("");
   const [formMessageType, setFormMessageType] = useState<"error" | "success">("success");
   const [activeForm, setActiveForm] = useState<"site" | "employee" | null>(null);
@@ -101,6 +132,69 @@ export default function AdminPage() {
     }
   }, []);
 
+  const refreshToday = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      const today = now.toISOString().slice(0, 10);
+
+      const [openResult, leaveResult] = await Promise.all([
+        supabase
+          .from("attendance")
+          .select("employee_id, presence_status")
+          .is("check_out_at", null)
+          .gte("check_in_at", startOfDay),
+        supabase
+          .from("leave_requests")
+          .select("employee_id")
+          .eq("status", "approved")
+          .lte("start_date", today)
+          .gte("end_date", today),
+      ]);
+      if (openResult.error) throw openResult.error;
+      if (leaveResult.error) throw leaveResult.error;
+
+      setTodayStats({
+        checkedIn: new Set(openResult.data.map((row) => row.employee_id)).size,
+        outside: openResult.data.filter((row) => row.presence_status === "outside_radius").length,
+        onLeave: new Set(leaveResult.data.map((row) => row.employee_id)).size,
+      });
+    } catch {
+      // Keep the previous figures; the directory error banner covers outages.
+    }
+  }, []);
+
+  const refreshActivity = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: authData } = await supabase.auth.getUser();
+      setCurrentUserId(authData.user?.id ?? null);
+      const { data, error } = await supabase
+        .from("audit_log")
+        .select("id, actor_id, action, entity_type, created_at")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      setActivity(data ?? []);
+      setActivityError("");
+    } catch (error) {
+      setActivityError(error instanceof Error ? error.message : "Could not load activity.");
+    }
+  }, []);
+
+  const handleViewDocuments = async (requestId: string) => {
+    setDocumentLinks((current) => ({ ...current, [requestId]: "loading" }));
+    try {
+      const response = await fetch(`/api/admin/leave/${requestId}/documents`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setDocumentLinks((current) => ({ ...current, [requestId]: result.documents ?? [] }));
+    } catch {
+      setDocumentLinks((current) => ({ ...current, [requestId]: "error" }));
+    }
+  };
+
   const refreshLeaveRequests = useCallback(async () => {
     const response = await fetch("/api/admin/leave");
     const result = await response.json();
@@ -114,7 +208,9 @@ export default function AdminPage() {
 
   useEffect(() => {
     void Promise.resolve().then(refreshDirectory);
-  }, [refreshDirectory]);
+    void Promise.resolve().then(refreshToday);
+    void Promise.resolve().then(refreshActivity);
+  }, [refreshDirectory, refreshToday, refreshActivity]);
 
   useEffect(() => {
     void Promise.resolve().then(refreshLeaveRequests).catch((error: unknown) => {
@@ -169,6 +265,7 @@ export default function AdminPage() {
       setFormMessage("Site created.");
       setActiveForm(null);
       await refreshDirectory();
+      void refreshActivity();
     } catch (error) {
       setFormMessage(
         error instanceof Error ? error.message : "Site creation failed unexpectedly.",
@@ -239,6 +336,7 @@ export default function AdminPage() {
       }
       setLeaveMessage(`Leave request ${decision}.`);
       await refreshLeaveRequests();
+      void refreshToday();
     } catch (error) {
       setLeaveError(
         error instanceof Error ? error.message : "Leave request could not be reviewed.",
@@ -246,6 +344,15 @@ export default function AdminPage() {
     } finally {
       setProcessingLeaveId(null);
     }
+  };
+
+  const allProfileName = (actorId: string | null) => {
+    if (!actorId) return "System";
+    return (
+      employees.find((employee) => employee.id === actorId)?.full_name ||
+      leaveEmployees.find((employee) => employee.id === actorId)?.full_name ||
+      (actorId === currentUserId ? displayName : "Administrator")
+    );
   };
 
   const updateRadius = (value: number) => setRadius(value);
@@ -386,11 +493,10 @@ export default function AdminPage() {
 
         <div className="stats">
           <div className="stat"><b>{employees.length}</b>Total employees in your site scope</div>
-          <div className="stat"><b className="green">43</b>Checked in</div>
-          <div className="stat"><b>7</b>Absent</div>
-          <div className="stat"><b style={{ color: "#9a1b1b" }}>3</b>Outside site</div>
-          <div className="stat"><b style={{ color: "#1e4fa0" }}>4</b>On leave</div>
-          <div className="stat"><b style={{ color: "#9a1b1b" }}>5</b>Open incidents</div>
+          <div className="stat"><b className="green">{todayStats.checkedIn}</b>Checked in</div>
+          <div className="stat"><b>{Math.max(0, employees.length - todayStats.checkedIn - todayStats.onLeave)}</b>Not checked in</div>
+          <div className="stat"><b style={{ color: "#9a1b1b" }}>{todayStats.outside}</b>Outside site</div>
+          <div className="stat"><b style={{ color: "#1e4fa0" }}>{todayStats.onLeave}</b>On leave</div>
         </div>
 
         <div className="grid2" style={{ gridTemplateColumns: "1.2fr 1fr" }}>
@@ -501,6 +607,28 @@ export default function AdminPage() {
                     {request.leave_type} leave · {request.start_date} to {request.end_date}
                   </span>
                   {request.reason ? <p style={{ margin: "8px 0" }}>Reason: {request.reason}</p> : null}
+                  {(() => {
+                    const links = documentLinks[request.id];
+                    if (links === undefined) {
+                      return (
+                        <button type="button" className="link-button" onClick={() => void handleViewDocuments(request.id)}>
+                          View supporting documents
+                        </button>
+                      );
+                    }
+                    if (links === "loading") return <p className="small">Loading documents...</p>;
+                    if (links === "error") return <p className="small">Documents could not be loaded.</p>;
+                    if (links.length === 0) return <p className="small">No documents attached.</p>;
+                    return (
+                      <p className="small">
+                        {links.map((link) => (
+                          <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" style={{ marginRight: 12 }}>
+                            {link.fileName}
+                          </a>
+                        ))}
+                      </p>
+                    );
+                  })()}
                   <button
                     className="btn"
                     type="button"
@@ -537,21 +665,16 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>10:05</td>
-                  <td>Nomsa Zulu</td>
-                  <td>Updated incident INC-014 to Investigating</td>
-                </tr>
-                <tr>
-                  <td>09:42</td>
-                  <td>Sipho Nkosi</td>
-                  <td>Reported incident INC-014</td>
-                </tr>
-                <tr>
-                  <td>08:21</td>
-                  <td>Thabo Mokoena</td>
-                  <td>Submitted leave request</td>
-                </tr>
+                {activity.map((entry) => (
+                  <tr key={entry.id}>
+                    <td>{new Date(entry.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</td>
+                    <td>{allProfileName(entry.actor_id)}</td>
+                    <td>{describeAction(entry.action)}</td>
+                  </tr>
+                ))}
+                {activity.length === 0 ? (
+                  <tr><td colSpan={3}>{activityError || "No activity recorded yet."}</td></tr>
+                ) : null}
               </tbody>
             </table>
           </div>

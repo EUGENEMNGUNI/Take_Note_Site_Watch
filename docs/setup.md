@@ -120,20 +120,22 @@ and leave decisions go through the database functions described in
 | `PATCH` | `/api/leave/{requestId}` | Employee | Cancel a pending request (`{"action":"cancel"}`) |
 | `GET` | `/api/admin/leave` | Administrator | List leave requests visible within the administrator's site scope |
 | `PATCH` | `/api/admin/leave/{requestId}` | Administrator | Approve or reject a pending request (`decision`, optional `note`) |
+| `GET` | `/api/admin/leave/{requestId}/documents` | Administrator | List a request's supporting documents with 5-minute signed URLs |
 
 Mutation routes require a same-origin JSON request. They validate input and
 return an `{ "error": "..." }` response with an appropriate HTTP status on
-failure. Secure document upload is still handled by Supabase Storage policies;
-the application upload flow and the manager, task, and incident features are
-not implemented.
+failure. Employees upload sick-leave documents straight to the private
+`leave-documents` bucket (Storage policies enforce ownership); the manager,
+task, and incident features are not implemented.
 
 ## Not done yet
 
-The sign-in flow now uses Supabase Auth and the signed-in user's `profiles`
-row to route employees and administrators. Administrators can create sites and
-register employee accounts from the dashboard. The forgot-password page is
-still a demo, and server-side page route protection/session refresh has not
-been added. Employee attendance and leave submission, and administrator leave
-review, are available through the API above; other dashboard cards remain demo
-data. The database schema currently supports employee and administrator roles;
-the manager screen is not backed by a database role.
+Sign-in, password reset (Supabase email one-time code), session refresh and
+redirect of signed-out visitors (`front-end/proxy.ts`), employee attendance and
+leave with document upload, and administrator leave review, site/employee
+creation, live attendance counts and activity history are implemented. The
+password-reset email must be configured in Supabase (the template has to
+include the `{{ .Token }}` code). Still demo data: employee tasks, incident
+reports, the manager screen, and the "Site rules" card (work hours and network
+have no schema yet). The database schema supports employee and administrator
+roles only.
