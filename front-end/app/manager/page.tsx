@@ -158,8 +158,10 @@ export default function ManagerPage() {
   }, []);
 
   useEffect(() => {
-    setTodayLabel(
-      new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" }),
+    void Promise.resolve().then(() =>
+      setTodayLabel(
+        new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" }),
+      ),
     );
     void Promise.resolve().then(refresh);
     void Promise.resolve().then(refreshMessages).catch((caught) => {

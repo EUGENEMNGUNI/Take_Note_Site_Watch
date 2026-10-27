@@ -516,4 +516,61 @@ select t.assert((select count(*) from public.tasks) = 0 and (select count(*) fro
   'administrator of another site cannot read them');
 
 :as_super
+-- =============================================================================
+-- Site messaging (0009, 0010)
+-- =============================================================================
+:as_emp1
+insert into public.site_conversations (site_id, created_by, title)
+  values ('11111111-1111-4111-8111-111111111111', '00000000-0000-4000-8000-0000000000e1', 'Shift handover');
+insert into public.site_messages (conversation_id, sender_id, body)
+  select id, '00000000-0000-4000-8000-0000000000e1', 'Gate B is locked' from public.site_conversations where title = 'Shift handover';
+select t.assert((select count(*) from public.site_messages) = 1, 'employee starts a thread and posts a message');
+select t.raises($$insert into public.site_messages (conversation_id, sender_id, body)
+                  select id, '00000000-0000-4000-8000-0000000000e2', 'spoofed' from public.site_conversations$$, '42501');
+select t.raises($$insert into public.site_conversations (site_id, created_by, title)
+                  values ('22222222-2222-4222-8222-222222222222', '00000000-0000-4000-8000-0000000000e1', 'Other site')$$, '42501');
+select t.raises($$update public.site_conversations set title = 'edited'$$, '42501');
+select t.raises($$delete from public.site_messages$$, '42501');
+select t.assert((select updated_at > created_at from public.site_conversations where title = 'Shift handover'),
+  'posting a message bumps the conversation updated_at');
+
+:as_mgr1
+insert into public.site_messages (conversation_id, sender_id, body)
+  select id, '00000000-0000-4000-8000-0000000000b1', 'Thanks, noted' from public.site_conversations where title = 'Shift handover';
+select t.assert((select count(*) from public.site_messages) = 2, 'manager at the same site can read and reply');
+
+:as_emp2
+select t.assert((select count(*) from public.site_messages) = 2, 'colleague at the same site sees the thread');
+select t.assert((select count(*) from public.profiles where id = '00000000-0000-4000-8000-0000000000b1') = 0,
+  'a colleague profile is still not readable by employees');
+select t.assert((select full_name from public.message_sender_names(
+                   array(select id from public.site_conversations))
+                 where sender_id = '00000000-0000-4000-8000-0000000000b1') = 'Manager One',
+  'employees can read sender names for threads they can see');
+select t.assert((select count(*) from public.message_sender_names(
+                   array(select id from public.site_conversations))) = 2,
+  'sender names expose only the senders');
+
+:as_emp3
+select t.assert((select count(*) from public.site_conversations) = 0 and (select count(*) from public.site_messages) = 0,
+  'an employee at another site sees no threads or messages');
+select t.assert((select count(*) from public.message_sender_names(
+                   array(select id from public.site_conversations where false))) = 0,
+  'no names for threads the caller cannot see');
+
+:as_admin1
+select t.assert((select count(*) from public.site_messages) = 2, 'scoped administrator can read site messages');
+
+:as_admin2
+select t.assert((select count(*) from public.site_messages) = 0, 'administrator of another site cannot read them');
+
+:as_super
+select t.assert((select count(*) from public.message_sender_names(array(select id from public.site_conversations))) = 0,
+  'the service role (no user) is not a site member, so no names are returned');
+select id as thread from public.site_conversations where title = 'Shift handover' \gset
+:as_emp3
+select t.raises(format($q$insert into public.site_messages (conversation_id, sender_id, body)
+                         values (%L, '00000000-0000-4000-8000-0000000000e3', 'intrude')$q$, :'thread'), '42501');
+:as_super
+
 select 'ALL DATABASE TESTS PASSED' as result;
