@@ -4,13 +4,8 @@ import { cookies } from "next/headers";
 import { getSupabasePublicEnv } from "./env";
 
 /**
- * Supabase client for Server Components, Server Functions and Route Handlers.
- * It acts as the signed-in user (session read from cookies), so Row Level
- * Security still applies. In this version of Next.js `cookies()` is async.
- *
- * To identify the caller on the server, use `supabase.auth.getUser()`, which
- * revalidates the token with Supabase. Do not trust `getSession()` for that:
- * it only reads the cookie.
+ * Creates a server client for the signed-in user. Row Level Security still
+ * applies because this client uses the public key and request cookies.
  */
 export async function createClient() {
   const cookieStore = await cookies();
@@ -27,9 +22,7 @@ export async function createClient() {
             cookieStore.set(name, value, options),
           );
         } catch {
-          // Called from a Server Component, where cookies are read-only.
-          // Safe to ignore once the proxy refreshes sessions (planned in the
-          // authentication step).
+          // Server Components cannot write cookies; the proxy refreshes sessions.
         }
       },
     },
