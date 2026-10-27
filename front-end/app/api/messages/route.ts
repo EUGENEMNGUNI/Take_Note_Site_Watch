@@ -23,16 +23,22 @@ type MessageRow = {
   sender_id: string;
   body: string;
   created_at: string;
-  profiles?: unknown;
 };
 
-function senderNameFromRow(row: MessageRow): string | null {
-  const profiles = row.profiles;
-  if (typeof profiles === "object" && profiles !== null && !Array.isArray(profiles)) {
-    const candidate = profiles as { full_name?: string | null };
-    return candidate.full_name ?? null;
+async function loadSenderNames(
+  supabase: Awaited<ReturnType<typeof requireApiUser>>["supabase"],
+  conversationIds: string[],
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  if (conversationIds.length === 0) return names;
+  const { data, error } = await supabase.rpc("message_sender_names", {
+    p_conversation_ids: conversationIds,
+  });
+  if (error) throw error;
+  for (const row of (data ?? []) as { sender_id: string; full_name: string | null }[]) {
+    if (row.full_name) names.set(row.sender_id, row.full_name);
   }
-  return null;
+  return names;
 }
 
 function trimText(value: unknown, label: string, min: number, max: number): string {
@@ -75,10 +81,11 @@ export async function GET(request: Request) {
 
       const { data: messageRows, error: messagesError } = await supabase
         .from("site_messages")
-        .select("id, conversation_id, sender_id, body, created_at, profiles!site_messages_sender_id_fkey(full_name)")
+        .select("id, conversation_id, sender_id, body, created_at")
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: true });
       if (messagesError) throw messagesError;
+      const names = await loadSenderNames(supabase, [conversationId]);
 
       return Response.json({
         conversation,
@@ -88,7 +95,7 @@ export async function GET(request: Request) {
           sender_id: row.sender_id,
           body: row.body,
           created_at: row.created_at,
-          sender_name: senderNameFromRow(row as MessageRow),
+          sender_name: names.get(row.sender_id) ?? null,
         })),
       });
     }
@@ -107,17 +114,18 @@ export async function GET(request: Request) {
     if (conversationIds.length > 0) {
       const { data, error: messagesError } = await supabase
         .from("site_messages")
-        .select("id, conversation_id, sender_id, body, created_at, profiles!site_messages_sender_id_fkey(full_name)")
+        .select("id, conversation_id, sender_id, body, created_at")
         .in("conversation_id", conversationIds)
         .order("created_at", { ascending: true });
       if (messagesError) throw messagesError;
       messageRows = (data ?? []) as MessageRow[];
     }
 
+    const names = await loadSenderNames(supabase, conversationIds);
     const messagesByConversation = new Map<string, Array<Record<string, string | null>>>();
     for (const row of messageRows) {
       const existing = messagesByConversation.get(row.conversation_id) ?? [];
-      const senderName = senderNameFromRow(row as MessageRow);
+      const senderName = names.get(row.sender_id) ?? null;
       existing.push({
         id: row.id,
         sender_id: row.sender_id,
@@ -176,11 +184,6 @@ export async function POST(request: Request) {
         .select("id, conversation_id, sender_id, body, created_at")
         .single();
       if (sendError) throw sendError;
-
-      await supabase
-        .from("site_conversations")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", conversationId);
 
       return Response.json({ message, conversationId }, { status: 201 });
     }
