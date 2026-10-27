@@ -49,6 +49,23 @@ type TaskRecord = {
   completed_at: string | null;
 };
 
+type MessageRecord = {
+  id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  sender_name: string | null;
+};
+
+type ConversationRecord = {
+  id: string;
+  site_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  messages: MessageRecord[];
+};
+
 const PRIORITY_PILL: Record<TaskRecord["priority"], string> = { high: "red", medium: "amber", low: "blue" };
 const STATUS_LABEL: Record<TaskRecord["status"], string> = {
   pending: "Pending",
@@ -70,6 +87,12 @@ export default function EmployeePage() {
   const [isSavingLeave, setIsSavingLeave] = useState(false);
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [taskError, setTaskError] = useState("");
+  const [conversations, setConversations] = useState<ConversationRecord[]>([]);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [messageDraft, setMessageDraft] = useState("");
+  const [messageError, setMessageError] = useState("");
+  const [messageSuccess, setMessageSuccess] = useState("");
+  const [isSavingMessage, setIsSavingMessage] = useState(false);
   const [incidentMessage, setIncidentMessage] = useState("");
   const [incidentError, setIncidentError] = useState("");
   const [isSavingIncident, setIsSavingIncident] = useState(false);
@@ -119,11 +142,30 @@ export default function EmployeePage() {
     setTaskError("");
   }, []);
 
+  const refreshMessages = useCallback(async () => {
+    const response = await fetch("/api/messages");
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error ?? "Could not load messages.");
+    }
+    const nextConversations = (result.conversations ?? []) as ConversationRecord[];
+    setConversations(nextConversations);
+    setSelectedConversationId((current) => {
+      if (current && nextConversations.some((conversation) => conversation.id === current)) {
+        return current;
+      }
+      return nextConversations[0]?.id ?? null;
+    });
+  }, []);
+
   useEffect(() => {
     void Promise.resolve().then(refreshTasks).catch((error: unknown) => {
       setTaskError(error instanceof Error ? error.message : "Could not load tasks.");
     });
-  }, [refreshTasks]);
+    void Promise.resolve().then(refreshMessages).catch((error: unknown) => {
+      setMessageError(error instanceof Error ? error.message : "Could not load messages.");
+    });
+  }, [refreshMessages, refreshTasks]);
 
   const handleTaskStatus = async (taskId: string, status: TaskRecord["status"]) => {
     setTaskError("");
@@ -169,6 +211,48 @@ export default function EmployeePage() {
       setIncidentError(error instanceof Error ? error.message : "Report could not be submitted.");
     } finally {
       setIsSavingIncident(false);
+    }
+  };
+
+  const selectedConversation =
+    conversations.find((conversation) => conversation.id === selectedConversationId) ?? conversations[0] ?? null;
+
+  const handleSendMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSavingMessage) return;
+    const trimmed = messageDraft.trim();
+    if (!trimmed) {
+      setMessageError("Write a message before sending.");
+      return;
+    }
+
+    setIsSavingMessage(true);
+    setMessageError("");
+    setMessageSuccess("");
+    try {
+      const body = {
+        content: trimmed,
+        ...(selectedConversation ? { conversationId: selectedConversation.id } : { title: "Site updates" }),
+      };
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Message could not be sent.");
+      setMessageDraft("");
+      setMessageSuccess("Message sent.");
+      await refreshMessages();
+      if (result.conversation?.id) {
+        setSelectedConversationId(result.conversation.id);
+      } else if (result.conversationId) {
+        setSelectedConversationId(result.conversationId);
+      }
+    } catch (error) {
+      setMessageError(error instanceof Error ? error.message : "Message could not be sent.");
+    } finally {
+      setIsSavingMessage(false);
     }
   };
 
@@ -398,6 +482,7 @@ export default function EmployeePage() {
           <div className="tag">SITE WATCH</div>
           <a className="nav on" href="#">Home</a>
           <a className="nav" href="#leave">Leave</a>
+          <a className="nav" href="#messages">Messages</a>
           <a className="nav" href="#report">Report</a>
           <div className="user">
             <b>{displayName}</b>
@@ -537,6 +622,67 @@ export default function EmployeePage() {
                 </div>
               ))}
               {leaveRequests.length === 0 && !leaveError ? <p className="small">No leave requests yet.</p> : null}
+            </div>
+
+            <div className="card" id="messages">
+              <h2>Site messages</h2>
+              <p className="small">Keep in touch with your site team.</p>
+
+              {messageError ? <p className="message-box error" role="alert">{messageError}</p> : null}
+              {messageSuccess ? <p className="message-box success" role="status">{messageSuccess}</p> : null}
+
+              {conversations.length > 0 ? (
+                <>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                    {conversations.map((conversation) => (
+                      <button
+                        key={conversation.id}
+                        type="button"
+                        className={selectedConversation?.id === conversation.id ? "btn" : "btn outline"}
+                        onClick={() => setSelectedConversationId(conversation.id)}
+                      >
+                        {conversation.title}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="card" style={{ background: "#f9f8f7", marginBottom: 16 }}>
+                    <h3>{selectedConversation?.title ?? "Conversation"}</h3>
+                    {selectedConversation?.messages.length ? (
+                      <div style={{ display: "grid", gap: 10, maxHeight: 240, overflowY: "auto" }}>
+                        {selectedConversation.messages.map((message) => (
+                          <div key={message.id} style={{ background: "#fff", border: "1px solid #e5e3e2", borderRadius: 10, padding: 10 }}>
+                            <div className="small" style={{ marginBottom: 4 }}>
+                              <b>{message.sender_name ?? "Team member"}</b> · {new Date(message.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
+                            </div>
+                            <div>{message.body}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="small">No messages yet. Start the conversation.</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="small">No conversations yet. Send the first message to start one.</p>
+              )}
+
+              <form onSubmit={handleSendMessage}>
+                <label htmlFor="message-draft">Your message</label>
+                <textarea
+                  id="message-draft"
+                  rows={3}
+                  value={messageDraft}
+                  onChange={(event) => setMessageDraft(event.target.value)}
+                  placeholder={selectedConversation ? "Write a message to the team" : "Start a site message thread"}
+                  maxLength={2000}
+                />
+                <br />
+                <button type="submit" className="btn" disabled={isSavingMessage}>
+                  {isSavingMessage ? "Sending..." : "Send message"}
+                </button>
+              </form>
             </div>
 
             <div className="card" id="report">

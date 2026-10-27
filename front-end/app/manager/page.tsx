@@ -6,7 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { signOut } from "@/lib/auth";
 import { RoleGuard } from "@/components/role-guard";
 
-type Tab = "dashboard" | "employees" | "checkins" | "tasks" | "incidents";
+type Tab = "dashboard" | "employees" | "checkins" | "tasks" | "incidents" | "messages";
 
 type Site = {
   id: string;
@@ -46,6 +46,23 @@ type Incident = {
   details: string;
   location: string | null;
   created_at: string;
+};
+
+type MessageRecord = {
+  id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  sender_name: string | null;
+};
+
+type ConversationRecord = {
+  id: string;
+  site_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  messages: MessageRecord[];
 };
 
 const PRIORITY_PILL = { high: "red", medium: "amber", low: "blue" } as const;
@@ -90,7 +107,14 @@ export default function ManagerPage() {
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [conversations, setConversations] = useState<ConversationRecord[]>([]);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [messageDraft, setMessageDraft] = useState("");
+  const [messageError, setMessageError] = useState("");
+  const [messageSuccess, setMessageSuccess] = useState("");
+  const [isSavingMessage, setIsSavingMessage] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState(false);
+  const [todayLabel, setTodayLabel] = useState("Today");
 
   const nameOf = useCallback(
     (id: string) => staff.find((person) => person.id === id)?.full_name || "Employee",
@@ -117,9 +141,34 @@ export default function ManagerPage() {
     }
   }, []);
 
+  const refreshMessages = useCallback(async () => {
+    const response = await fetch("/api/messages");
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error ?? "Could not load messages.");
+    }
+    const nextConversations = (result.conversations ?? []) as ConversationRecord[];
+    setConversations(nextConversations);
+    setSelectedConversationId((current) => {
+      if (current && nextConversations.some((conversation) => conversation.id === current)) {
+        return current;
+      }
+      return nextConversations[0]?.id ?? null;
+    });
+  }, []);
+
   useEffect(() => {
+    setTodayLabel(
+      new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" }),
+    );
     void Promise.resolve().then(refresh);
-  }, [refresh]);
+    void Promise.resolve().then(refreshMessages).catch((caught) => {
+      setMessageError(caught instanceof Error ? caught.message : "Could not load messages.");
+    });
+  }, [refresh, refreshMessages]);
+
+  const selectedConversation =
+    conversations.find((conversation) => conversation.id === selectedConversationId) ?? conversations[0] ?? null;
 
   const openTasks = tasks.filter((task) => task.status !== "done");
   const openIncidents = incidents.filter((incident) => incident.status !== "resolved");
@@ -189,6 +238,45 @@ export default function ManagerPage() {
     }
   };
 
+  const handleSendMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSavingMessage) return;
+    const trimmed = messageDraft.trim();
+    if (!trimmed) {
+      setMessageError("Write a message before sending.");
+      return;
+    }
+
+    setIsSavingMessage(true);
+    setMessageError("");
+    setMessageSuccess("");
+    try {
+      const payload = {
+        content: trimmed,
+        ...(selectedConversation ? { conversationId: selectedConversation.id } : { title: `Site updates - ${site?.name ?? "team"}` }),
+      };
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Message could not be sent.");
+      setMessageDraft("");
+      setMessageSuccess("Message sent.");
+      await refreshMessages();
+      if (result.conversation?.id) {
+        setSelectedConversationId(result.conversation.id);
+      } else if (result.conversationId) {
+        setSelectedConversationId(result.conversationId);
+      }
+    } catch (caught) {
+      setMessageError(caught instanceof Error ? caught.message : "Message could not be sent.");
+    } finally {
+      setIsSavingMessage(false);
+    }
+  };
+
   const siteMap = () => {
     if (!site) return null;
     const points = checkedIn
@@ -229,6 +317,7 @@ export default function ManagerPage() {
           {tab("checkins", "Check-ins log")}
           {tab("tasks", "Tasks", openTasks.length)}
           {tab("incidents", "Incidents", openIncidents.length, true)}
+          {tab("messages", "Messages")}
           <div className="user">
             <b>{displayName}</b>
             <br />
@@ -244,7 +333,7 @@ export default function ManagerPage() {
             <div>
               <h1>{site?.name ?? "Your site"}</h1>
               <span className="small">
-                {new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}
+                {todayLabel}
                 {site ? ` · working hours ${site.work_start.slice(0, 5)}–${site.work_end.slice(0, 5)}` : ""}
               </span>
             </div>
@@ -365,6 +454,67 @@ export default function ManagerPage() {
                   {attendance.length === 0 ? <tr><td colSpan={5}>No check-ins recorded today.</td></tr> : null}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {activeTab === "messages" && (
+            <div className="card">
+              <h2>Site messages</h2>
+              {messageError ? <p className="message-box error" role="alert">{messageError}</p> : null}
+              {messageSuccess ? <p className="message-box success" role="status">{messageSuccess}</p> : null}
+
+              {conversations.length > 0 ? (
+                <>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                    {conversations.map((conversation) => (
+                      <button
+                        key={conversation.id}
+                        type="button"
+                        className={selectedConversation?.id === conversation.id ? "btn" : "btn outline"}
+                        onClick={() => setSelectedConversationId(conversation.id)}
+                      >
+                        {conversation.title}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{ background: "#f9f8f7", border: "1px solid #e5e3e2", borderRadius: 12, padding: 16, marginBottom: 18 }}>
+                    <h3>{selectedConversation?.title ?? "Conversation"}</h3>
+                    {selectedConversation?.messages.length ? (
+                      <div style={{ display: "grid", gap: 10, maxHeight: 260, overflowY: "auto" }}>
+                        {selectedConversation.messages.map((message) => (
+                          <div key={message.id} style={{ background: "#fff", border: "1px solid #e5e3e2", borderRadius: 10, padding: 10 }}>
+                            <div className="small" style={{ marginBottom: 4 }}>
+                              <b>{message.sender_name ?? "Team member"}</b> · {new Date(message.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
+                            </div>
+                            <div>{message.body}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="small">No messages in this thread yet.</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="small">No site conversations yet.</p>
+              )}
+
+              <form onSubmit={handleSendMessage}>
+                <label htmlFor="manager-message-draft">Your message</label>
+                <textarea
+                  id="manager-message-draft"
+                  rows={3}
+                  value={messageDraft}
+                  onChange={(event) => setMessageDraft(event.target.value)}
+                  placeholder={selectedConversation ? "Reply to the site thread" : "Start a new message thread"}
+                  maxLength={2000}
+                />
+                <br />
+                <button type="submit" className="btn" disabled={isSavingMessage}>
+                  {isSavingMessage ? "Sending..." : "Send"}
+                </button>
+              </form>
             </div>
           )}
 
