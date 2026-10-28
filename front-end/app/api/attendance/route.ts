@@ -27,7 +27,7 @@ export async function GET() {
         .limit(100),
       supabase
         .from("sites")
-        .select("id, name, latitude, longitude, radius_m, enforce_radius")
+        .select("id, name, latitude, longitude, radius_m, enforce_radius, work_start, work_end")
         .eq("is_active", true)
         .order("name"),
     ]);

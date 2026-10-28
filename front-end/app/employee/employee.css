@@ -1,0 +1,40 @@
+/* Employee mobile app: extras on top of the shared .mobile styles in globals.css */
+.m-greet h1 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 22px;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-top: 2px;
+}
+.m-title {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+.m-card h2 { font-size: 20px; }
+.m-card .head > div { min-width: 0; }
+.checkin-btn { margin-top: 14px; font-size: 16px; }
+.m-note { margin-top: 10px; line-height: 1.4; }
+.m-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 18px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.balance { font-size: 15px; color: var(--grey); margin-top: 6px; }
+.balance b { font: 700 34px/1 var(--font-display); color: var(--dark); margin-right: 4px; }
+.dropzone {
+  border: 1.5px dashed #b9b6b6;
+  border-radius: 10px;
+  background: #f0eeee;
+  padding: 10px;
+}
+.dropzone input { border: 0; background: transparent; padding: 0; font-size: 13px; }
+.req-row .meta { margin-top: 2px; }
+.thread-body { display: grid; gap: 8px; max-height: 320px; overflow-y: auto; }
+.thread-list button b { display: block; }
+.seg label { font-size: 14px; }
+.m-task .row b { font-weight: 700; }

@@ -1,0 +1,42 @@
+/* Admin overview: page-specific styling on top of globals.css */
+.admin-main .top p.sub { color: var(--grey); font-size: 13px; margin-top: 4px; }
+.admin-main .top .actions { display: flex; gap: 10px; }
+.admin-main .stat b.red-num { color: #9a1b1b; }
+.admin-main .stat b.blue-num { color: #1e4fa0; }
+.admin-main .stat b.green-num { color: var(--green); }
+
+.admin-grid-a { display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; margin-bottom: 16px; }
+.admin-grid-b { display: grid; grid-template-columns: 0.95fr 1.25fr; gap: 16px; margin-bottom: 16px; }
+.admin-main section, .admin-main .card { scroll-margin-top: 16px; }
+
+.admin-main .card-head .head-note { color: var(--grey); font-size: 12px; }
+.admin-main .card-head select { width: auto; max-width: 190px; padding: 4px 8px; font-size: 12px; }
+.admin-main .card-head .view-all { font-size: 12px; font-weight: 700; }
+
+.slider-row { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0 2px; }
+.slider-row label { margin: 0; }
+.slider-row b { font: 700 18px var(--font-display); }
+.rules-times { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.rules-note { margin: 8px 0 14px; }
+
+.leave-block { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.leave-block .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.leave-block .row b { font-size: 15px; }
+.leave-block .meta { color: var(--grey); font-size: 12px; margin-top: 3px; }
+.leave-block .reason { margin: 8px 0 4px; font-size: 14px; }
+.leave-block .doc-link { display: block; margin: 4px 0 10px; font-size: 13px; color: #1e4fa0; font-weight: 600; }
+.leave-block .doc-link.plain { color: var(--grey); font-weight: 500; }
+.leave-block .doc-links { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 4px 0 10px; font-size: 13px; }
+.leave-block .doc-links a { color: #1e4fa0; }
+.leave-block .buttons { display: flex; gap: 10px; }
+
+.users-sub { color: var(--grey); font-size: 12px; }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.form-actions { display: flex; gap: 10px; margin-top: 10px; }
+.checkbox-label { display: flex; align-items: center; gap: 8px; align-self: end; margin: 12px 0 8px; }
+.checkbox-label input { width: auto; margin: 0; }
+
+@media (max-width: 900px) {
+  .admin-grid-a, .admin-grid-b, .form-grid { grid-template-columns: 1fr; }
+}

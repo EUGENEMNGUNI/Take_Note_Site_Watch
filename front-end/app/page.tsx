@@ -10,6 +10,7 @@ import {
   setStoredUserEmail,
 } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/browser";
+import { BrandLogo } from "@/components/brand";
 
 export default function Home() {
   const router = useRouter();
@@ -117,30 +118,33 @@ export default function Home() {
   return (
     <main className="login">
       <div className="left">
-        <div className="logo">TAKE NOTE</div>
-        <div className="small" style={{ marginTop: 8, letterSpacing: "2px", fontWeight: 700, color: "#bbb" }}>
-          SITE WATCH
+        <div className="brand-row">
+          <BrandLogo />
+          <span>SITE WATCH</span>
         </div>
 
         <div className="bar" />
 
         <h1>Attendance, tasks and site safety in one place.</h1>
 
-        <p style={{ color: "#ccc", maxWidth: 560, lineHeight: 1.6 }}>
-          Check in only when you are on the company network and inside the site. Managers see who is on site,
-          what needs doing and what needs fixing.
+        <p>
+          Check in from your site and your location is verified against the site radius. Managers see who is on
+          site, what needs doing and what needs fixing.
         </p>
 
         <div className="feat">
           <div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg>
             <b>Verified check-in</b>
-            Network and site radius are checked before attendance is recorded.
+            Site radius is checked before attendance is recorded.
           </div>
           <div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4h6v3H9zM9 12h6M9 16h6" /></svg>
             <b>Daily tasks</b>
             Assigned work with priority, due time and live status.
           </div>
           <div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z" /><path d="M12 10v5M12 18v.5" /></svg>
             <b>Incident reporting</b>
             Report hazards fast and follow them to resolution.
           </div>
@@ -148,41 +152,43 @@ export default function Home() {
       </div>
 
       <div className="right">
-        <h1>Sign in</h1>
-        <p className="small">Use the account your administrator created for you.</p>
+        <div className="panel">
+          <h1>Sign in</h1>
+          <p className="small">Use the account your administrator created for you.</p>
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="email">Work email</label>
-            <input id="email" name="email" type="email" placeholder="name@company.co.za" autoComplete="email" required />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <div className="password-wrap">
-              <input
-                id="password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
-                autoComplete="current-password"
-                required
-              />
-              <button type="button" className="show-password" onClick={() => setShowPassword((value) => !value)}>
-                {showPassword ? "Hide" : "Show"}
-              </button>
+          <form onSubmit={handleSubmit} style={{ marginTop: 18 }}>
+            <div className="form-group">
+              <label htmlFor="email">Work email</label>
+              <input id="email" name="email" type="email" placeholder="name@company.co.za" autoComplete="email" required />
             </div>
-          </div>
 
-          <div className="login-options">
-            <Link href="/forgot-password">Forgot password?</Link>
-          </div>
+            <div className="form-group">
+              <label htmlFor="password">Password</label>
+              <div className="password-wrap">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  required
+                />
+                <button type="button" className="show-password" onClick={() => setShowPassword((value) => !value)}>
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
 
-          <button type="submit" className="btn login-btn" disabled={isSubmitting}>
-            {isSubmitting ? "Signing in..." : "Sign in"}
-          </button>
-          {message ? <div className="message error">{message}</div> : null}
-        </form>
+            <button type="submit" className="btn login-btn" disabled={isSubmitting}>
+              {isSubmitting ? "Signing in..." : "Sign in"}
+            </button>
+            {message ? <div className="message error" role="alert">{message}</div> : null}
+
+            <div className="login-options">
+              <Link href="/forgot-password">Forgot password?</Link>
+            </div>
+          </form>
+        </div>
       </div>
     </main>
   );

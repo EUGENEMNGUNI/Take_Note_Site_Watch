@@ -24,7 +24,8 @@ export async function getAuthenticatedProfile(): Promise<AuthenticatedProfile | 
     error: userError,
   } = await supabase.auth.getUser();
 
-  if (userError) {
+  // A visitor with no session is not an error: they simply are not signed in.
+  if (userError && userError.name !== "AuthSessionMissingError") {
     throw userError;
   }
 
