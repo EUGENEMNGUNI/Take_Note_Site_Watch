@@ -4,8 +4,12 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
 import { getStoredUserEmail, signOut } from "@/lib/auth";
+import { formatWhen } from "@/lib/format";
 import { RoleGuard } from "@/components/role-guard";
 import { createClient } from "@/lib/supabase/browser";
+import { Avatar, BrandLogo } from "@/components/brand";
+
+import "./admin.css";
 
 type SiteRecord = {
   id: string;
@@ -66,12 +70,45 @@ const ACTION_LABELS: Record<string, string> = {
   "site.updated": "Updated a site",
   "site.activated": "Activated a site",
   "site.deactivated": "Deactivated a site",
+  "task.created": "Created a task",
+  "task.status_changed": "Updated a task status",
+  "incident.reported": "Reported an incident",
+  "incident.status_changed": "Updated an incident status",
+  "leave.submitted": "Submitted a leave request",
+  "leave.approved": "Approved a leave request",
+  "leave.rejected": "Rejected a leave request",
+  "leave.cancelled": "Cancelled a leave request",
+  "leave.document_added": "Attached a leave document",
   "admin_scope.granted": "Granted administrator site access",
   "admin_scope.revoked": "Revoked administrator site access",
 };
 
 const describeAction = (action: string) =>
   ACTION_LABELS[action] ?? action.replace(/[._]/g, " ");
+
+type NavId = "dashboard" | "users" | "roles" | "sites" | "assignments" | "leave" | "activity";
+
+const NAV_ITEMS: { id: NavId; label: string; target: string | null }[] = [
+  { id: "dashboard", label: "Dashboard", target: null },
+  { id: "users", label: "User management", target: "users" },
+  { id: "roles", label: "Role management", target: "users" },
+  { id: "sites", label: "Site management", target: "sites" },
+  { id: "assignments", label: "Site assignments", target: "site-rules" },
+  { id: "leave", label: "Leave requests", target: "leave" },
+  { id: "activity", label: "Activity history", target: "activity" },
+];
+
+const formatDayMonth = (isoDate: string) => {
+  const [, month, day] = isoDate.split("-");
+  return `${day}/${month}`;
+};
+
+const inclusiveDays = (start: string, end: string) => {
+  const ms = new Date(`${end}T00:00:00Z`).getTime() - new Date(`${start}T00:00:00Z`).getTime();
+  return Math.max(1, Math.round(ms / 86_400_000) + 1);
+};
+
+const capitalise = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
 export default function AdminPage() {
   const router = useRouter();
@@ -103,9 +140,14 @@ export default function AdminPage() {
   const [formMessageType, setFormMessageType] = useState<"error" | "success">("success");
   const [activeForm, setActiveForm] = useState<"site" | "employee" | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeNav, setActiveNav] = useState<NavId>("dashboard");
+  const [todayLabel, setTodayLabel] = useState("Today");
 
   useEffect(() => {
     void Promise.resolve().then(() => {
+      setTodayLabel(
+        new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" }),
+      );
       const email = getStoredUserEmail();
       setDisplayName(email ? email.split("@")[0].replace(/[._-]/g, " ") : "Admin");
     });
@@ -384,6 +426,14 @@ export default function AdminPage() {
     setRuleNetwork(selected.authorised_network ?? "");
   };
 
+  useEffect(() => {
+    // Start with the first site selected so the rules are visible straight away.
+    if (!ruleSiteId && sites.length > 0) {
+      void Promise.resolve().then(() => selectRuleSite(sites[0].id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sites, ruleSiteId]);
+
   const handleSaveRules = async () => {
     if (isSavingRules || !ruleSiteId) return;
     if (ruleEnd <= ruleStart) {
@@ -427,6 +477,22 @@ export default function AdminPage() {
   };
 
   const updateRadius = (value: number) => setRadius(value);
+
+  const goTo = (item: (typeof NAV_ITEMS)[number]) => {
+    setActiveNav(item.id);
+    if (item.target === null) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    document.getElementById(item.target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const managerOf = (siteId: string) =>
+    employees.find(
+      (person) => person.role === "manager" && person.is_active && person.home_site_id === siteId,
+    )?.full_name ?? "—";
+
+  const pendingLeave = leaveRequests.filter((request) => request.status === "pending");
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -441,335 +507,359 @@ export default function AdminPage() {
   return (
     <RoleGuard allowedRoles={["admin"]}>
       <div className="app">
-      <aside className="side">
-        <div className="logo">TAKE NOTE</div>
-        <div className="tag">SITE WATCH</div>
+        <aside className="side">
+          <BrandLogo />
+          <div className="tag">SITE WATCH</div>
 
-        <a className="nav on" href="#">Dashboard</a>
-        <a className="nav" href="#">User management</a>
-        <a className="nav" href="#">Role management</a>
-        <a className="nav" href="#">Site management</a>
-        <a className="nav" href="#">Site assignments</a>
-        <a className="nav" href="#">
-          Leave requests
-          <span className="badge">{leaveRequests.filter((request) => request.status === "pending").length}</span>
-        </a>
-        <a className="nav" href="#">Activity history</a>
-
-        <div className="user">
-          <b>{displayName}</b>
-          <br />
-          Administrator
-          <br />
-          <button type="button" className="link-button" onClick={handleSignOut}>Sign out</button>
-          {signOutMessage ? <div className="message error" role="alert">{signOutMessage}</div> : null}
-        </div>
-      </aside>
-
-      <main className="main">
-        <div className="top">
-          <div>
-            <h1>Company overview</h1>
-            <span className="small">Manage your company sites and employees</span>
-          </div>
-          <div>
-            <button className="btn outline" type="button" onClick={() => openForm("site")}>New site</button>
-            <button className="btn" type="button" style={{ marginLeft: 12 }} onClick={() => openForm("employee")}>Register employee</button>
-          </div>
-        </div>
-
-        {directoryError ? <div className="message-box error" role="alert">{directoryError}</div> : null}
-
-        {activeForm === "site" ? (
-          <section className="card" aria-labelledby="create-site-heading" style={{ marginBottom: 18 }}>
-            <h2 id="create-site-heading">Create site</h2>
-            <form onSubmit={handleCreateSite}>
-              <div className="grid2" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 0 }}>
-                <div>
-                  <label htmlFor="site-name">Site name</label>
-                  <input id="site-name" name="name" required minLength={1} maxLength={120} />
-                </div>
-                <div>
-                  <label htmlFor="site-address">Address</label>
-                  <input id="site-address" name="address" maxLength={300} />
-                </div>
-                <div>
-                  <label htmlFor="site-latitude">Latitude</label>
-                  <input id="site-latitude" name="latitude" type="number" min={-90} max={90} step="any" required />
-                </div>
-                <div>
-                  <label htmlFor="site-longitude">Longitude</label>
-                  <input id="site-longitude" name="longitude" type="number" min={-180} max={180} step="any" required />
-                </div>
-                <div>
-                  <label htmlFor="site-radius">Attendance radius (metres)</label>
-                  <input id="site-radius" name="radius_m" type="number" min={10} max={5000} defaultValue={150} required />
-                </div>
-                <label style={{ alignSelf: "end", marginBottom: 12 }}>
-                  <input name="enforce_radius" type="checkbox" style={{ width: "auto", marginRight: 8 }} />
-                  Reject check-ins outside the radius
-                </label>
-              </div>
-              <button className="btn" type="submit" disabled={isSaving}>{isSaving ? "Creating..." : "Create site"}</button>
-              <button className="btn outline" type="button" onClick={closeForm} disabled={isSaving} style={{ marginLeft: 10 }}>Cancel</button>
-            </form>
-          </section>
-        ) : null}
-
-        {activeForm === "employee" ? (
-          <section className="card" aria-labelledby="register-employee-heading" style={{ marginBottom: 18 }}>
-            <h2 id="register-employee-heading">Register employee</h2>
-            {sites.filter((site) => site.is_active).length === 0 ? (
-              <p className="message error" role="alert">Create an active site before registering an employee.</p>
-            ) : (
-              <form onSubmit={handleRegisterEmployee}>
-                <div className="grid2" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 0 }}>
-                  <div>
-                    <label htmlFor="employee-name">Full name</label>
-                    <input id="employee-name" name="full_name" required minLength={2} maxLength={120} />
-                  </div>
-                  <div>
-                    <label htmlFor="employee-email">Email address</label>
-                    <input id="employee-email" name="email" type="email" required maxLength={254} autoComplete="email" />
-                  </div>
-                  <div>
-                    <label htmlFor="employee-password">Temporary password</label>
-                    <input id="employee-password" name="password" type="password" required minLength={12} maxLength={72} autoComplete="new-password" />
-                  </div>
-                  <div>
-                    <label htmlFor="employee-role">Role</label>
-                    <select id="employee-role" name="role" defaultValue="employee">
-                      <option value="employee">Employee</option>
-                      <option value="manager">Site manager</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="employee-site">Home site</label>
-                    <select id="employee-site" name="home_site_id" required defaultValue="">
-                      <option value="" disabled>Select a site</option>
-                      {sites.filter((site) => site.is_active).map((site) => (
-                        <option key={site.id} value={site.id}>{site.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <p className="small" style={{ margin: "8px 0 14px" }}>
-                  Share the temporary password securely. The employee will sign in with this email and password.
-                </p>
-                <button className="btn" type="submit" disabled={isSaving}>{isSaving ? "Registering..." : "Register employee"}</button>
-                <button className="btn outline" type="button" onClick={closeForm} disabled={isSaving} style={{ marginLeft: 10 }}>Cancel</button>
-              </form>
-            )}
-          </section>
-        ) : null}
-
-        {formMessage ? (
-          <div className={`message-box ${formMessageType}`} role={formMessageType === "error" ? "alert" : "status"}>
-            {formMessage}
-          </div>
-        ) : null}
-
-        <div className="stats">
-          <div className="stat"><b>{employees.length}</b>Total staff in your site scope</div>
-          <div className="stat"><b className="green">{todayStats.checkedIn}</b>Checked in</div>
-          <div className="stat"><b>{Math.max(0, employees.filter((person) => person.role === "employee").length - todayStats.checkedIn - todayStats.onLeave)}</b>Not checked in</div>
-          <div className="stat"><b style={{ color: "#9a1b1b" }}>{todayStats.outside}</b>Outside site</div>
-          <div className="stat"><b style={{ color: "#1e4fa0" }}>{todayStats.onLeave}</b>On leave</div>
-          <div className="stat"><b style={{ color: "#9a1b1b" }}>{openIncidents}</b>Open incidents</div>
-        </div>
-
-        <div className="grid2" style={{ gridTemplateColumns: "1.2fr 1fr" }}>
-          <div className="card">
-            <h2>Sites</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Site</th>
-                  <th>Staff</th>
-                  <th>Radius</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sites.map((site) => (
-                  <tr key={site.id}>
-                    <td>
-                      <b>{site.name}</b>
-                      {site.address ? <><br /><span className="small">{site.address}</span></> : null}
-                      {!site.is_active ? <><br /><span className="pill grey">Inactive</span></> : null}
-                    </td>
-                    <td>{employees.filter((employee) => employee.home_site_id === site.id).length}</td>
-                    <td>{site.radius_m} m</td>
-                  </tr>
-                ))}
-                {sites.length === 0 ? (
-                  <tr><td colSpan={3}>{directoryError ? "Sites could not be loaded." : "No sites found. Create your first site."}</td></tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="card">
-            <h2>Site rules</h2>
-
-            <label htmlFor="rules-site">Site</label>
-            <select id="rules-site" value={ruleSiteId} onChange={(e) => selectRuleSite(e.target.value)}>
-              <option value="" disabled>Select a site</option>
-              {sites.map((site) => (
-                <option key={site.id} value={site.id}>{site.name}</option>
-              ))}
-            </select>
-
-            <label htmlFor="rules-radius">
-              Site radius: <span id="radiusText">{radius}</span> m
-            </label>
-            <input id="rules-radius" type="range" min={50} max={500} value={radius} onChange={(e) => updateRadius(Number(e.target.value))} />
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label htmlFor="rules-start">Work starts</label>
-                <input id="rules-start" type="time" value={ruleStart} onChange={(e) => setRuleStart(e.target.value)} />
-              </div>
-              <div>
-                <label htmlFor="rules-end">Work ends</label>
-                <input id="rules-end" type="time" value={ruleEnd} onChange={(e) => setRuleEnd(e.target.value)} />
-              </div>
-            </div>
-
-            <label htmlFor="rules-network">Authorised network</label>
-            <input id="rules-network" value={ruleNetwork} maxLength={200} onChange={(e) => setRuleNetwork(e.target.value)} placeholder="e.g. Company Wi-Fi" />
-
-            <p className="small" style={{ margin: "8px 0 14px" }}>
-              Working hours and network are recorded for the site. Location is only requested at check-in.
-            </p>
-
-            <button className="btn" type="button" onClick={() => void handleSaveRules()} disabled={isSavingRules || !ruleSiteId}>
-              {isSavingRules ? "Saving..." : "Save site rules"}
-            </button>
-            {ruleMessage ? (
-              <p className={`message-box ${ruleMessageType}`} role={ruleMessageType === "error" ? "alert" : "status"}>{ruleMessage}</p>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="card" style={{ marginBottom: 18 }}>
-          <h2>Employees</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Home site</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employees.map((employee) => (
-                <tr key={employee.id}>
-                  <td>{employee.full_name || "—"}</td>
-                  <td>{employee.email || "—"}</td>
-                  <td>{employee.role === "manager" ? "Site manager" : "Employee"}</td>
-                  <td>{sites.find((site) => site.id === employee.home_site_id)?.name ?? "Unassigned"}</td>
-                  <td><span className={`pill ${employee.is_active ? "green" : "grey"}`}>{employee.is_active ? "Active" : "Inactive"}</span></td>
-                </tr>
-              ))}
-              {employees.length === 0 ? (
-                <tr><td colSpan={5}>{directoryError ? "Employees could not be loaded." : "No employees found."}</td></tr>
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`nav${activeNav === item.id ? " on" : ""}`}
+              onClick={() => goTo(item)}
+            >
+              {item.label}
+              {item.id === "leave" && pendingLeave.length > 0 ? (
+                <span className="badge">{pendingLeave.length}</span>
               ) : null}
-            </tbody>
-          </table>
-        </div>
+            </button>
+          ))}
 
-        <div className="grid2" style={{ gridTemplateColumns: "1fr 1.2fr" }}>
-          <div className="card">
-            <h2>Leave awaiting approval</h2>
-            {leaveMessage ? <p className="message-box success" role="status">{leaveMessage}</p> : null}
-            {leaveError ? <p className="message-box error" role="alert">{leaveError}</p> : null}
-            {leaveRequests.filter((request) => request.status === "pending").map((request) => {
-              const employee = leaveEmployees.find((item) => item.id === request.employee_id);
-              return (
-                <div key={request.id} style={{ border: "1px solid #e3e0e0", borderRadius: 10, padding: 14, marginBottom: 12 }}>
-                  <b>{employee?.full_name || employee?.email || "Employee"}</b>
-                  <span className="pill amber" style={{ float: "right" }}>Pending</span>
-                  <br />
-                  <span className="small">
-                    {request.leave_type} leave · {request.start_date} to {request.end_date}
-                  </span>
-                  {request.reason ? <p style={{ margin: "8px 0" }}>Reason: {request.reason}</p> : null}
-                  {(() => {
-                    const links = documentLinks[request.id];
-                    if (links === undefined) {
-                      return (
-                        <button type="button" className="link-button" onClick={() => void handleViewDocuments(request.id)}>
-                          View supporting documents
-                        </button>
-                      );
-                    }
-                    if (links === "loading") return <p className="small">Loading documents...</p>;
-                    if (links === "error") return <p className="small">Documents could not be loaded.</p>;
-                    if (links.length === 0) return <p className="small">No documents attached.</p>;
-                    return (
-                      <p className="small">
+          <div className="user">
+            <Avatar name={displayName} red />
+            <div>
+              <b>{displayName}</b>
+              <span>Administrator</span>
+              <br />
+              <button type="button" className="link-button" onClick={handleSignOut}>Sign out</button>
+              {signOutMessage ? <div className="message error" role="alert">{signOutMessage}</div> : null}
+            </div>
+          </div>
+        </aside>
+
+        <main className="main admin-main">
+          <div className="top">
+            <div>
+              <h1>Company overview</h1>
+              <p className="sub">All sites · {todayLabel}</p>
+            </div>
+            <div className="actions">
+              <button className="btn outline" type="button" onClick={() => openForm("site")}>New site</button>
+              <button className="btn" type="button" onClick={() => openForm("employee")}>Register employee</button>
+            </div>
+          </div>
+
+          {directoryError ? <div className="message-box error" role="alert">{directoryError}</div> : null}
+
+          {activeForm === "site" ? (
+            <section className="card stack" aria-labelledby="create-site-heading">
+              <h2 id="create-site-heading">Create site</h2>
+              <form onSubmit={handleCreateSite}>
+                <div className="form-grid">
+                  <div>
+                    <label htmlFor="site-name">Site name</label>
+                    <input id="site-name" name="name" required minLength={1} maxLength={120} />
+                  </div>
+                  <div>
+                    <label htmlFor="site-address">Address</label>
+                    <input id="site-address" name="address" maxLength={300} />
+                  </div>
+                  <div>
+                    <label htmlFor="site-latitude">Latitude</label>
+                    <input id="site-latitude" name="latitude" type="number" min={-90} max={90} step="any" required />
+                  </div>
+                  <div>
+                    <label htmlFor="site-longitude">Longitude</label>
+                    <input id="site-longitude" name="longitude" type="number" min={-180} max={180} step="any" required />
+                  </div>
+                  <div>
+                    <label htmlFor="site-radius">Attendance radius (metres)</label>
+                    <input id="site-radius" name="radius_m" type="number" min={10} max={5000} defaultValue={150} required />
+                  </div>
+                  <label className="checkbox-label">
+                    <input name="enforce_radius" type="checkbox" />
+                    Reject check-ins outside the radius
+                  </label>
+                </div>
+                <div className="form-actions">
+                  <button className="btn" type="submit" disabled={isSaving}>{isSaving ? "Creating..." : "Create site"}</button>
+                  <button className="btn outline" type="button" onClick={closeForm} disabled={isSaving}>Cancel</button>
+                </div>
+              </form>
+            </section>
+          ) : null}
+
+          {activeForm === "employee" ? (
+            <section className="card stack" aria-labelledby="register-employee-heading">
+              <h2 id="register-employee-heading">Register employee</h2>
+              {sites.filter((site) => site.is_active).length === 0 ? (
+                <p className="message error" role="alert">Create an active site before registering an employee.</p>
+              ) : (
+                <form onSubmit={handleRegisterEmployee}>
+                  <div className="form-grid">
+                    <div>
+                      <label htmlFor="employee-name">Full name</label>
+                      <input id="employee-name" name="full_name" required minLength={2} maxLength={120} />
+                    </div>
+                    <div>
+                      <label htmlFor="employee-email">Email address</label>
+                      <input id="employee-email" name="email" type="email" required maxLength={254} autoComplete="email" />
+                    </div>
+                    <div>
+                      <label htmlFor="employee-password">Temporary password</label>
+                      <input id="employee-password" name="password" type="password" required minLength={12} maxLength={72} autoComplete="new-password" />
+                    </div>
+                    <div>
+                      <label htmlFor="employee-role">Role</label>
+                      <select id="employee-role" name="role" defaultValue="employee">
+                        <option value="employee">Employee</option>
+                        <option value="manager">Site manager</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="employee-site">Home site</label>
+                      <select id="employee-site" name="home_site_id" required defaultValue="">
+                        <option value="" disabled>Select a site</option>
+                        {sites.filter((site) => site.is_active).map((site) => (
+                          <option key={site.id} value={site.id}>{site.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="small" style={{ margin: "8px 0 14px" }}>
+                    Share the temporary password securely. The employee will sign in with this email and password.
+                  </p>
+                  <div className="form-actions">
+                    <button className="btn" type="submit" disabled={isSaving}>{isSaving ? "Registering..." : "Register employee"}</button>
+                    <button className="btn outline" type="button" onClick={closeForm} disabled={isSaving}>Cancel</button>
+                  </div>
+                </form>
+              )}
+            </section>
+          ) : null}
+
+          {formMessage ? (
+            <div className={`message-box ${formMessageType} stack`} role={formMessageType === "error" ? "alert" : "status"}>
+              {formMessage}
+            </div>
+          ) : null}
+
+          <div className="stats">
+            <div className="stat"><b>{employees.length}</b>Total employees</div>
+            <div className="stat"><b className="green-num">{todayStats.checkedIn}</b>Checked in</div>
+            <div className="stat"><b>{Math.max(0, employees.filter((person) => person.role === "employee").length - todayStats.checkedIn - todayStats.onLeave)}</b>Absent</div>
+            <div className="stat"><b className="red-num">{todayStats.outside}</b>Outside site</div>
+            <div className="stat"><b className="blue-num">{todayStats.onLeave}</b>On leave</div>
+            <div className="stat"><b className="red-num">{openIncidents}</b>Open incidents</div>
+          </div>
+
+          <div className="admin-grid-a">
+            <section className="card" id="sites">
+              <div className="card-head"><h2>Sites</h2></div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Site</th>
+                    <th>Manager</th>
+                    <th>Staff</th>
+                    <th>Radius</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sites.map((site) => (
+                    <tr key={site.id}>
+                      <td>
+                        <b>{site.name}</b>
+                        {site.address ? <><br /><span className="small">{site.address}</span></> : null}
+                        {!site.is_active ? <><br /><span className="pill grey">Inactive</span></> : null}
+                      </td>
+                      <td>{managerOf(site.id)}</td>
+                      <td>{employees.filter((employee) => employee.home_site_id === site.id).length}</td>
+                      <td>{site.radius_m} m</td>
+                    </tr>
+                  ))}
+                  {sites.length === 0 ? (
+                    <tr><td colSpan={4}>{directoryError ? "Sites could not be loaded." : "No sites found. Create your first site."}</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </section>
+
+            <section className="card" id="site-rules">
+              <div className="card-head">
+                <h2>Site rules</h2>
+                <select id="rules-site" aria-label="Site" value={ruleSiteId} onChange={(e) => selectRuleSite(e.target.value)}>
+                  <option value="" disabled>Select a site</option>
+                  {sites.map((site) => (
+                    <option key={site.id} value={site.id}>{site.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="slider-row">
+                <label htmlFor="rules-radius">Site radius</label>
+                <b><span id="radiusText">{radius}</span> m</b>
+              </div>
+              <input id="rules-radius" type="range" min={50} max={500} value={radius} onChange={(e) => updateRadius(Number(e.target.value))} />
+
+              <div className="rules-times">
+                <div>
+                  <label htmlFor="rules-start">Work starts</label>
+                  <input id="rules-start" type="time" value={ruleStart} onChange={(e) => setRuleStart(e.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="rules-end">Work ends</label>
+                  <input id="rules-end" type="time" value={ruleEnd} onChange={(e) => setRuleEnd(e.target.value)} />
+                </div>
+              </div>
+
+              <label htmlFor="rules-network">Authorised network</label>
+              <input id="rules-network" value={ruleNetwork} maxLength={200} onChange={(e) => setRuleNetwork(e.target.value)} placeholder="e.g. Company Wi-Fi" />
+
+              <p className="small rules-note">
+                Working hours and network are recorded for the site but not yet enforced at check-in. Location is only requested at check-in.
+              </p>
+
+              <button className="btn" type="button" onClick={() => void handleSaveRules()} disabled={isSavingRules || !ruleSiteId}>
+                {isSavingRules ? "Saving..." : "Save site rules"}
+              </button>
+              {ruleMessage ? (
+                <p className={`message-box ${ruleMessageType}`} role={ruleMessageType === "error" ? "alert" : "status"}>{ruleMessage}</p>
+              ) : null}
+            </section>
+          </div>
+
+          <div className="admin-grid-b">
+            <section className="card" id="leave">
+              <div className="card-head"><h2>Leave awaiting approval</h2></div>
+              {leaveMessage ? <p className="message-box success" role="status">{leaveMessage}</p> : null}
+              {leaveError ? <p className="message-box error" role="alert">{leaveError}</p> : null}
+              {pendingLeave.map((request) => {
+                const employee = leaveEmployees.find((item) => item.id === request.employee_id);
+                const links = documentLinks[request.id];
+                return (
+                  <div key={request.id} className="leave-block">
+                    <div className="row">
+                      <b>{employee?.full_name || employee?.email || "Employee"}</b>
+                      <span className="pill amber dot">Pending</span>
+                    </div>
+                    <div className="meta">
+                      {capitalise(request.leave_type)} leave · {formatDayMonth(request.start_date)} to {formatDayMonth(request.end_date)} ·{" "}
+                      {inclusiveDays(request.start_date, request.end_date)} {inclusiveDays(request.start_date, request.end_date) === 1 ? "day" : "days"}
+                    </div>
+                    {request.reason ? <p className="reason">Reason: {request.reason}</p> : null}
+                    {links === undefined ? (
+                      <button type="button" className="link-button doc-link" onClick={() => void handleViewDocuments(request.id)}>
+                        View supporting documents
+                      </button>
+                    ) : links === "loading" ? (
+                      <span className="doc-link plain">Loading documents...</span>
+                    ) : links === "error" ? (
+                      <span className="doc-link plain">Documents could not be loaded.</span>
+                    ) : links.length === 0 ? (
+                      <span className="doc-link plain">No documents attached.</span>
+                    ) : (
+                      <div className="doc-links">
                         {links.map((link) => (
-                          <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" style={{ marginRight: 12 }}>
+                          <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer">
                             {link.fileName}
                           </a>
                         ))}
-                      </p>
-                    );
-                  })()}
-                  <button
-                    className="btn"
-                    type="button"
-                    disabled={processingLeaveId === request.id}
-                    onClick={() => void handleLeaveDecision(request.id, "approved")}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    className="btn outline"
-                    type="button"
-                    style={{ marginLeft: 10 }}
-                    disabled={processingLeaveId === request.id}
-                    onClick={() => void handleLeaveDecision(request.id, "rejected")}
-                  >
-                    Reject
-                  </button>
-                </div>
-              );
-            })}
-            {leaveRequests.every((request) => request.status !== "pending") && !leaveError ? (
-              <p className="small">No leave requests are awaiting approval.</p>
-            ) : null}
+                      </div>
+                    )}
+                    <div className="buttons">
+                      <button
+                        className="btn"
+                        type="button"
+                        disabled={processingLeaveId === request.id}
+                        onClick={() => void handleLeaveDecision(request.id, "approved")}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        className="btn outline"
+                        type="button"
+                        disabled={processingLeaveId === request.id}
+                        onClick={() => void handleLeaveDecision(request.id, "rejected")}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {pendingLeave.length === 0 && !leaveError ? (
+                <p className="small">No leave requests are awaiting approval.</p>
+              ) : null}
+            </section>
+
+            <section className="card" id="activity">
+              <div className="card-head">
+                <h2>Activity history</h2>
+                <button type="button" className="link-button view-all" onClick={() => void refreshActivity()}>View all</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>User</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activity.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>{formatWhen(entry.created_at)}</td>
+                      <td>{allProfileName(entry.actor_id)}</td>
+                      <td>{describeAction(entry.action)}</td>
+                    </tr>
+                  ))}
+                  {activity.length === 0 ? (
+                    <tr><td colSpan={3}>{activityError || "No activity recorded yet."}</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </section>
           </div>
 
-          <div className="card">
-            <h2>Activity history</h2>
+          <section className="card stack" id="users">
+            <div className="card-head">
+              <h2>Users and roles</h2>
+              <button type="button" className="link-button view-all" onClick={() => openForm("employee")}>Manage users</button>
+            </div>
             <table>
               <thead>
                 <tr>
-                  <th>Time</th>
-                  <th>User</th>
-                  <th>Action</th>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Site</th>
+                  <th>Account</th>
                 </tr>
               </thead>
               <tbody>
-                {activity.map((entry) => (
-                  <tr key={entry.id}>
-                    <td>{new Date(entry.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</td>
-                    <td>{allProfileName(entry.actor_id)}</td>
-                    <td>{describeAction(entry.action)}</td>
+                {employees.map((employee) => (
+                  <tr key={employee.id}>
+                    <td>
+                      <b>{employee.full_name || "—"}</b>
+                      {employee.email ? <><br /><span className="users-sub">{employee.email}</span></> : null}
+                    </td>
+                    <td>
+                      <span className={`pill ${employee.role === "manager" ? "blue" : "grey"}`}>
+                        {employee.role === "manager" ? "Site Manager" : "Employee"}
+                      </span>
+                    </td>
+                    <td>{sites.find((site) => site.id === employee.home_site_id)?.name ?? "Unassigned"}</td>
+                    <td>{employee.is_active ? "Active" : "Inactive"}</td>
                   </tr>
                 ))}
-                {activity.length === 0 ? (
-                  <tr><td colSpan={3}>{activityError || "No activity recorded yet."}</td></tr>
+                {employees.length === 0 ? (
+                  <tr><td colSpan={4}>{directoryError ? "Employees could not be loaded." : "No employees found."}</td></tr>
                 ) : null}
               </tbody>
             </table>
-          </div>
-        </div>
-      </main>
-    </div>
+          </section>
+        </main>
+      </div>
     </RoleGuard>
   );
 }

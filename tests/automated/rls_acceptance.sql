@@ -484,6 +484,9 @@ select t.assert((select count(*) from public.tasks) = 0, 'manager of another sit
 :as_emp1
 select public.report_incident('hazard', 'high', 'Water leak in Bay 3', 'Warehouse');
 select t.assert((select count(*) from public.incidents) = 1, 'employee reports an incident');
+select t.assert((select ref_no from public.incidents limit 1) = 1, 'incidents get a sequential reference number');
+select t.raises($$insert into public.incidents (site_id, reported_by, category, details, ref_no)
+                  values ('11111111-1111-4111-8111-111111111111', '00000000-0000-4000-8000-0000000000e1', 'hazard', 'x', 99)$$, '428C9');
 select t.raises($$select public.report_incident('hazard', 'low', '   ')$$, '22023');
 select t.raises($$insert into public.incidents (site_id, reported_by, category, details)
                   values ('11111111-1111-4111-8111-111111111111', '00000000-0000-4000-8000-0000000000e1', 'hazard', 'x')$$, '42501');
@@ -572,5 +575,11 @@ select id as thread from public.site_conversations where title = 'Shift handover
 select t.raises(format($q$insert into public.site_messages (conversation_id, sender_id, body)
                          values (%L, '00000000-0000-4000-8000-0000000000e3', 'intrude')$q$, :'thread'), '42501');
 :as_super
+
+-- Incident reference numbers keep counting up.
+:as_super
+insert into public.incidents (site_id, reported_by, category, details)
+  values ('11111111-1111-4111-8111-111111111111', '00000000-0000-4000-8000-0000000000e1', 'accident', 'Minor slip near gate');
+select t.assert((select max(ref_no) from public.incidents) = 2, 'the reference number increments for each incident');
 
 select 'ALL DATABASE TESTS PASSED' as result;

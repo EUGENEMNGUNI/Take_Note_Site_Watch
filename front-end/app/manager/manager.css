@@ -1,0 +1,71 @@
+/* Manager screens: extras on top of globals.css */
+
+.mgr .top .head-right { display: flex; align-items: center; gap: 12px; }
+.mgr .monitor { font-size: 12px; }
+
+.mgr .stat-num-red { color: #9a1b1b; }
+.mgr .stat-num-amber { color: #9a5b00; }
+
+.mgr .card-link { font-size: 13px; }
+.mgr .card-head .count { font-size: 13px; color: var(--grey); font-weight: 600; }
+
+/* Live site map */
+.mgr .map-card .legend { margin-bottom: 10px; }
+.mgr .sitemap { position: relative; }
+.mgr .map-note { color: var(--grey); font-size: 11px; text-align: right; margin-top: 6px; }
+.mgr .map-empty { padding: 40px 0; text-align: center; color: var(--grey); font-size: 14px; }
+
+/* Alerts */
+.mgr .alert-row .grow { flex: 1; min-width: 0; }
+.mgr .alert-row b { display: block; font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+.mgr .alert-row .sub { color: var(--grey); font-size: 12px; margin-top: 1px; }
+.mgr .alert-row .act { font-size: 12.5px; white-space: nowrap; }
+
+/* Tables with pills */
+.mgr td .pill { vertical-align: middle; }
+
+/* Tasks */
+.mgr .task-form-grid {
+  display: grid;
+  grid-template-columns: 2fr 1.1fr 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+.mgr .task-form-grid label { margin-top: 0; }
+.mgr .tcard .row b { font-weight: 700; }
+.mgr .tcard.done .meta { text-decoration: none; }
+.mgr .tcard .move { width: auto; max-width: 100%; }
+.mgr .page-sub { margin: -8px 0 16px; }
+
+/* Incidents */
+.mgr .inc-card { cursor: pointer; }
+.mgr .inc-card .row span:first-child { letter-spacing: 0.2px; }
+.mgr .inc-card .who { color: var(--grey); font-size: 11.5px; margin-top: 8px; display: block; }
+.mgr .inc-detail .detail-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--grey); }
+.mgr .inc-detail h2.detail-title { font-size: 24px; margin: 4px 0 8px; }
+.mgr .inc-detail p.body { font-size: 14px; line-height: 1.5; margin-bottom: 4px; }
+.mgr .inc-detail dd.red-text { color: #9a1b1b; }
+.mgr .inc-detail h4 {
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--grey);
+  margin: 16px 0 6px;
+  font-weight: 700;
+}
+.mgr .activity { display: grid; grid-template-columns: 50px 1fr; gap: 6px 10px; font-size: 13px; }
+.mgr .activity span:nth-child(odd) { color: var(--grey); }
+.mgr .status-select { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.mgr .status-select label { margin: 0; white-space: nowrap; }
+.mgr .status-select select { width: auto; }
+
+/* Messages */
+.mgr .msg-layout { display: grid; grid-template-columns: 0.8fr 1.4fr; gap: 16px; align-items: start; }
+.mgr .thread-list button b { display: block; font-size: 14px; }
+.mgr .thread-list button span { color: var(--grey); font-size: 12px; }
+.mgr .bubbles { display: grid; gap: 8px; max-height: 320px; overflow-y: auto; margin-bottom: 14px; }
+.mgr .bubble .who { color: var(--grey); font-size: 12px; margin-bottom: 2px; }
+
+@media (max-width: 900px) {
+  .mgr .task-form-grid, .mgr .msg-layout { grid-template-columns: 1fr; }
+}

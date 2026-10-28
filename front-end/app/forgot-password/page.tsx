@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { createClient } from "@/lib/supabase/browser";
+import { BrandLogo } from "@/components/brand";
 
 export default function ForgotPasswordPage() {
   const [step, setStep] = useState<"request" | "otp" | "reset" | "done">("request");
@@ -112,7 +113,7 @@ export default function ForgotPasswordPage() {
     <div className="forgot-page">
       <div className="forgot-box">
         <div className="brand">
-          <div className="logo">TAKE NOTE</div>
+          <BrandLogo />
           <span className="brand-name">SITE WATCH</span>
         </div>
 

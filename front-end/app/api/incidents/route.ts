@@ -27,7 +27,7 @@ export async function GET() {
     const { supabase } = await requireApiUser(["employee", "manager"]);
     const { data, error } = await supabase
       .from("incidents")
-      .select("id, site_id, reported_by, category, priority, status, details, location, created_at")
+      .select("id, ref_no, site_id, reported_by, category, priority, status, details, location, created_at")
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) throw error;
