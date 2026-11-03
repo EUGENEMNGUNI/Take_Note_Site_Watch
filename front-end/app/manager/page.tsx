@@ -423,9 +423,12 @@ export default function ManagerPage() {
       <>
         <div className="sitemap">
           <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Check-in positions relative to the site">
-            <circle cx={cx} cy={cy} r={radiusPx} fill="rgba(213,21,28,0.10)" stroke="#d5151c" strokeWidth={1.5} strokeDasharray="5 4" />
-            <rect x={cx - 30} y={cy - 18} width={60} height={36} rx={4} fill="#d5151c" />
-            <text x={cx} y={cy + 4} textAnchor="middle" fontSize={10} fontWeight={700} fill="#fff" fontFamily="Barlow, Arial, sans-serif">
+            <circle cx={cx} cy={cy} r={radiusPx} fill="rgba(59,91,219,0.10)" stroke="#3b5bdb" strokeWidth={1.5} strokeDasharray="5 4" />
+            <text x={cx} y={Math.max(12, cy - radiusPx - 6)} textAnchor="middle" fontSize={10} fontWeight={600} fill="#3b5bdb" fontFamily="Inter, Arial, sans-serif">
+              {site.radius_m} m radius
+            </text>
+            <rect x={cx - 34} y={cy - 16} width={68} height={32} rx={6} fill="#111827" />
+            <text x={cx} y={cy + 4} textAnchor="middle" fontSize={10} fontWeight={600} fill="#fff" fontFamily="Inter, Arial, sans-serif">
               HQ building
             </text>
             {points.map(({ row, x, y }) => {
@@ -439,8 +442,8 @@ export default function ManagerPage() {
                   </circle>
                   {row.presence_status === "outside_radius" ? (
                     <g>
-                      <rect x={px - 4} y={py + 9} width={label.length * 5.4 + 8} height={14} rx={3} fill="#fff" stroke="#e3e0e0" />
-                      <text x={px} y={py + 19} fontSize={9} fontWeight={700} fill="#16171b" fontFamily="Barlow, Arial, sans-serif">
+                      <rect x={px - 4} y={py + 9} width={label.length * 5.6 + 8} height={14} rx={4} fill="#fff" stroke="#e5e7eb" />
+                      <text x={px} y={py + 19} fontSize={9} fontWeight={600} fill="#111827" fontFamily="Inter, Arial, sans-serif">
                         {" "}{label}
                       </text>
                     </g>

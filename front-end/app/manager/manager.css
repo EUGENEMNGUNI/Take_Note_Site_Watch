@@ -10,9 +10,28 @@
 .mgr .card-head .count { font-size: 13px; color: var(--grey); font-weight: 600; }
 
 /* Live site map */
-.mgr .map-card .legend { margin-bottom: 10px; }
-.mgr .sitemap { position: relative; }
-.mgr .map-note { color: var(--grey); font-size: 11px; text-align: right; margin-top: 6px; }
+.mgr .map-card .legend { margin-bottom: 10px; gap: 8px; }
+.mgr .map-card .legend span {
+  display: inline-flex;
+  align-items: center;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-family: "Inter", var(--font-sans);
+  font-weight: 600;
+  color: #374151;
+}
+.mgr .map-card .legend i { margin-right: 6px; }
+.mgr .sitemap {
+  position: relative;
+  border: 1px solid #d5ddf0;
+  border-radius: 12px;
+  background:
+    linear-gradient(#d3dcf0 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, #d3dcf0 1px, transparent 1px) 0 0 / 24px 24px,
+    #e6ecf8;
+}
+.mgr .map-note { color: var(--grey); font-family: "Inter", var(--font-sans); font-size: 11px; text-align: right; margin-top: 6px; }
 .mgr .map-empty { padding: 40px 0; text-align: center; color: var(--grey); font-size: 14px; }
 
 /* Alerts */
