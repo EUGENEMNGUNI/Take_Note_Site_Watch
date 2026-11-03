@@ -11,6 +11,8 @@ import { RoleGuard } from "@/components/role-guard";
 
 import "./manager.css";
 
+const LIVE_REFRESH_MS = 60_000;
+
 type Tab = "dashboard" | "employees" | "checkins" | "tasks" | "incidents" | "messages";
 
 type Site = {
@@ -181,6 +183,7 @@ export default function ManagerPage() {
   const [isSavingMessage, setIsSavingMessage] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const nameOf = useCallback(
     (id: string) => staff.find((person) => person.id === id)?.full_name || "Employee",
@@ -203,6 +206,7 @@ export default function ManagerPage() {
       setTasks(taskResult.tasks ?? []);
       setIncidents(incidentResult.incidents ?? []);
       setError("");
+      setLastUpdated(new Date());
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load the dashboard.");
     }
@@ -231,6 +235,14 @@ export default function ManagerPage() {
       setMessageError(caught instanceof Error ? caught.message : "Could not load messages.");
     });
   }, [refresh, refreshMessages]);
+
+  // Keep the dashboard and live map current while the page is open and visible.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, LIVE_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
 
   const selectedConversation =
     conversations.find((conversation) => conversation.id === selectedConversationId) ?? conversations[0] ?? null;
@@ -424,7 +436,10 @@ export default function ManagerPage() {
     return (
       <>
         <LiveMap site={site} points={mapPoints} />
-        <p className="map-note">Site radius {site.radius_m} m · positions are the check-in locations shared today</p>
+        <p className="map-note">
+          Site radius {site.radius_m} m · check-in locations shared today
+          {lastUpdated ? ` · updated ${lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}
+        </p>
       </>
     );
   };

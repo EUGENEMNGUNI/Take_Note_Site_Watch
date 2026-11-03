@@ -21,19 +21,10 @@ export type LiveMapPoint = {
   showLabel: boolean;
 };
 
-type Basemap = "street" | "satellite";
-
-const BASEMAPS: Record<Basemap, { url: string; attribution: string; maxZoom: number }> = {
-  street: {
-    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution: "&copy; OpenStreetMap contributors",
-    maxZoom: 19,
-  },
-  satellite: {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics",
-    maxZoom: 19,
-  },
+const STREET_TILES = {
+  url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  attribution: "&copy; OpenStreetMap contributors",
+  maxZoom: 19,
 };
 
 function escapeHtml(value: string): string {
@@ -54,7 +45,7 @@ export function LiveMap({ site, points }: { site: LiveMapSite; points: LiveMapPo
   const tilesRef = useRef<TileLayer | null>(null);
   const overlaysRef = useRef<LayerGroup | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
-  const [basemap, setBasemap] = useState<Basemap>("street");
+  const fittedForRef = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
 
   // Create the map once.
@@ -76,25 +67,25 @@ export function LiveMap({ site, points }: { site: LiveMapSite; points: LiveMapPo
       mapRef.current = null;
       tilesRef.current = null;
       overlaysRef.current = null;
+      fittedForRef.current = null;
       setReady(false);
     };
     // The map is created once; site and points are applied by the effects below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Swap the base map tiles.
+  // Add the street tiles once the map exists.
   useEffect(() => {
     const L = leafletRef.current;
     const map = mapRef.current;
     if (!ready || !L || !map) return;
     tilesRef.current?.remove();
-    const config = BASEMAPS[basemap];
-    tilesRef.current = L.tileLayer(config.url, {
-      attribution: config.attribution,
-      maxZoom: config.maxZoom,
+    tilesRef.current = L.tileLayer(STREET_TILES.url, {
+      attribution: STREET_TILES.attribution,
+      maxZoom: STREET_TILES.maxZoom,
     }).addTo(map);
     tilesRef.current.bringToBack();
-  }, [ready, basemap]);
+  }, [ready]);
 
   // Draw the site radius and check-in positions.
   useEffect(() => {
@@ -144,21 +135,18 @@ export function LiveMap({ site, points }: { site: LiveMapSite; points: LiveMapPo
       bounds.extend(position);
     }
 
-    map.invalidateSize();
-    map.fitBounds(bounds, { paddingTopLeft: [24, 24], paddingBottomRight: [24, 44], maxZoom: 18 });
+    // Fit once per site so a refresh does not undo the viewer's own zoom and pan.
+    const siteKey = `${site.latitude},${site.longitude},${site.radius_m}`;
+    if (fittedForRef.current !== siteKey) {
+      map.invalidateSize();
+      map.fitBounds(bounds, { paddingTopLeft: [24, 24], paddingBottomRight: [24, 44], maxZoom: 18 });
+      fittedForRef.current = siteKey;
+    }
   }, [ready, site, points]);
 
   return (
     <div className="live-map">
       <div ref={containerRef} className="live-map-canvas" role="region" aria-label="Live site map" />
-      <div className="live-map-switch" role="group" aria-label="Map style">
-        <button type="button" aria-pressed={basemap === "street"} onClick={() => setBasemap("street")}>
-          Map
-        </button>
-        <button type="button" aria-pressed={basemap === "satellite"} onClick={() => setBasemap("satellite")}>
-          Satellite
-        </button>
-      </div>
     </div>
   );
 }
