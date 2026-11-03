@@ -6,9 +6,12 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { signOut } from "@/lib/auth";
 import { formatWhen, incidentRef } from "@/lib/format";
 import { Avatar, BrandLogo } from "@/components/brand";
+import { LiveMap, type LiveMapPoint } from "@/components/live-map";
 import { RoleGuard } from "@/components/role-guard";
 
 import "./manager.css";
+
+const LIVE_REFRESH_MS = 60_000;
 
 type Tab = "dashboard" | "employees" | "checkins" | "tasks" | "incidents" | "messages";
 
@@ -180,6 +183,7 @@ export default function ManagerPage() {
   const [isSavingMessage, setIsSavingMessage] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const nameOf = useCallback(
     (id: string) => staff.find((person) => person.id === id)?.full_name || "Employee",
@@ -202,6 +206,7 @@ export default function ManagerPage() {
       setTasks(taskResult.tasks ?? []);
       setIncidents(incidentResult.incidents ?? []);
       setError("");
+      setLastUpdated(new Date());
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load the dashboard.");
     }
@@ -231,6 +236,14 @@ export default function ManagerPage() {
     });
   }, [refresh, refreshMessages]);
 
+  // Keep the dashboard and live map current while the page is open and visible.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, LIVE_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+
   const selectedConversation =
     conversations.find((conversation) => conversation.id === selectedConversationId) ?? conversations[0] ?? null;
 
@@ -250,6 +263,21 @@ export default function ManagerPage() {
   }, [attendance]);
   const checkedIn = attendance.filter((row) => row.check_out_at === null);
   const outside = checkedIn.filter((row) => row.presence_status === "outside_radius");
+
+  const mapPoints = useMemo<LiveMapPoint[]>(() => {
+    if (!site) return [];
+    return attendance
+      .filter((row) => row.check_out_at === null && row.check_in_lat !== null && row.check_in_lng !== null)
+      .map((row) => ({
+        id: row.id,
+        lat: row.check_in_lat as number,
+        lng: row.check_in_lng as number,
+        color: presenceOf(row, site).color,
+        name: nameOf(row.employee_id),
+        label: shortName(nameOf(row.employee_id)),
+        showLabel: row.presence_status === "outside_radius",
+      }));
+  }, [attendance, site, nameOf]);
 
   const startMinutes = minutesFromTimeString(site?.work_start, 8 * 60);
   const lateRows = [...latestByEmployee.values()].filter(
@@ -405,52 +433,13 @@ export default function ManagerPage() {
 
   const siteMap = () => {
     if (!site) return null;
-    const width = 560;
-    const height = 300;
-    const cx = width / 2;
-    const cy = height / 2;
-    const points = checkedIn
-      .filter((row) => row.check_in_lat !== null && row.check_in_lng !== null)
-      .map((row) => ({ row, ...offsetMetres(site, row.check_in_lat!, row.check_in_lng!) }));
-    const extent = Math.max(site.radius_m * 1.45, ...points.map((point) => Math.hypot(point.x, point.y) * 1.12));
-    const scale = (height / 2 - 18) / extent;
-    const radiusPx = site.radius_m * scale;
-    const place = (x: number, y: number) => ({
-      px: Math.min(width - 14, Math.max(14, cx + x * scale)),
-      py: Math.min(height - 14, Math.max(14, cy - y * scale)),
-    });
     return (
       <>
-        <div className="sitemap">
-          <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Check-in positions relative to the site">
-            <circle cx={cx} cy={cy} r={radiusPx} fill="rgba(213,21,28,0.10)" stroke="#d5151c" strokeWidth={1.5} strokeDasharray="5 4" />
-            <rect x={cx - 30} y={cy - 18} width={60} height={36} rx={4} fill="#d5151c" />
-            <text x={cx} y={cy + 4} textAnchor="middle" fontSize={10} fontWeight={700} fill="#fff" fontFamily="Barlow, Arial, sans-serif">
-              HQ building
-            </text>
-            {points.map(({ row, x, y }) => {
-              const { px, py } = place(x, y);
-              const presence = presenceOf(row, site);
-              const label = shortName(nameOf(row.employee_id));
-              return (
-                <g key={row.id}>
-                  <circle cx={px} cy={py} r={6} fill={presence.color} stroke="#fff" strokeWidth={1.5}>
-                    <title>{nameOf(row.employee_id)}</title>
-                  </circle>
-                  {row.presence_status === "outside_radius" ? (
-                    <g>
-                      <rect x={px - 4} y={py + 9} width={label.length * 5.4 + 8} height={14} rx={3} fill="#fff" stroke="#e3e0e0" />
-                      <text x={px} y={py + 19} fontSize={9} fontWeight={700} fill="#16171b" fontFamily="Barlow, Arial, sans-serif">
-                        {" "}{label}
-                      </text>
-                    </g>
-                  ) : null}
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-        <p className="map-note">Site radius {site.radius_m} m · positions are the check-in locations shared today</p>
+        <LiveMap site={site} points={mapPoints} />
+        <p className="map-note">
+          Site radius {site.radius_m} m · check-in locations shared today
+          {lastUpdated ? ` · updated ${lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}
+        </p>
       </>
     );
   };
