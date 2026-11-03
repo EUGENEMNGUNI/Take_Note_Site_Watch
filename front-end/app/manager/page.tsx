@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { signOut } from "@/lib/auth";
 import { formatWhen, incidentRef } from "@/lib/format";
 import { Avatar, BrandLogo } from "@/components/brand";
+import { LiveMap, type LiveMapPoint } from "@/components/live-map";
 import { RoleGuard } from "@/components/role-guard";
 
 import "./manager.css";
@@ -251,6 +252,21 @@ export default function ManagerPage() {
   const checkedIn = attendance.filter((row) => row.check_out_at === null);
   const outside = checkedIn.filter((row) => row.presence_status === "outside_radius");
 
+  const mapPoints = useMemo<LiveMapPoint[]>(() => {
+    if (!site) return [];
+    return attendance
+      .filter((row) => row.check_out_at === null && row.check_in_lat !== null && row.check_in_lng !== null)
+      .map((row) => ({
+        id: row.id,
+        lat: row.check_in_lat as number,
+        lng: row.check_in_lng as number,
+        color: presenceOf(row, site).color,
+        name: nameOf(row.employee_id),
+        label: shortName(nameOf(row.employee_id)),
+        showLabel: row.presence_status === "outside_radius",
+      }));
+  }, [attendance, site, nameOf]);
+
   const startMinutes = minutesFromTimeString(site?.work_start, 8 * 60);
   const lateRows = [...latestByEmployee.values()].filter(
     (row) => minutesOfDay(new Date(row.check_in_at)) > startMinutes,
@@ -405,54 +421,9 @@ export default function ManagerPage() {
 
   const siteMap = () => {
     if (!site) return null;
-    const width = 560;
-    const height = 300;
-    const cx = width / 2;
-    const cy = height / 2;
-    const points = checkedIn
-      .filter((row) => row.check_in_lat !== null && row.check_in_lng !== null)
-      .map((row) => ({ row, ...offsetMetres(site, row.check_in_lat!, row.check_in_lng!) }));
-    const extent = Math.max(site.radius_m * 1.45, ...points.map((point) => Math.hypot(point.x, point.y) * 1.12));
-    const scale = (height / 2 - 18) / extent;
-    const radiusPx = site.radius_m * scale;
-    const place = (x: number, y: number) => ({
-      px: Math.min(width - 14, Math.max(14, cx + x * scale)),
-      py: Math.min(height - 14, Math.max(14, cy - y * scale)),
-    });
     return (
       <>
-        <div className="sitemap">
-          <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Check-in positions relative to the site">
-            <circle cx={cx} cy={cy} r={radiusPx} fill="rgba(59,91,219,0.10)" stroke="#3b5bdb" strokeWidth={1.5} strokeDasharray="5 4" />
-            <text x={cx} y={Math.max(12, cy - radiusPx - 6)} textAnchor="middle" fontSize={10} fontWeight={600} fill="#3b5bdb" fontFamily="Inter, Arial, sans-serif">
-              {site.radius_m} m radius
-            </text>
-            <rect x={cx - 34} y={cy - 16} width={68} height={32} rx={6} fill="#111827" />
-            <text x={cx} y={cy + 4} textAnchor="middle" fontSize={10} fontWeight={600} fill="#fff" fontFamily="Inter, Arial, sans-serif">
-              HQ building
-            </text>
-            {points.map(({ row, x, y }) => {
-              const { px, py } = place(x, y);
-              const presence = presenceOf(row, site);
-              const label = shortName(nameOf(row.employee_id));
-              return (
-                <g key={row.id}>
-                  <circle cx={px} cy={py} r={6} fill={presence.color} stroke="#fff" strokeWidth={1.5}>
-                    <title>{nameOf(row.employee_id)}</title>
-                  </circle>
-                  {row.presence_status === "outside_radius" ? (
-                    <g>
-                      <rect x={px - 4} y={py + 9} width={label.length * 5.6 + 8} height={14} rx={4} fill="#fff" stroke="#e5e7eb" />
-                      <text x={px} y={py + 19} fontSize={9} fontWeight={600} fill="#111827" fontFamily="Inter, Arial, sans-serif">
-                        {" "}{label}
-                      </text>
-                    </g>
-                  ) : null}
-                </g>
-              );
-            })}
-          </svg>
-        </div>
+        <LiveMap site={site} points={mapPoints} />
         <p className="map-note">Site radius {site.radius_m} m · positions are the check-in locations shared today</p>
       </>
     );
