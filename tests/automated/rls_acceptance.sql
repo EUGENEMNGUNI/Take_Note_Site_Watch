@@ -448,6 +448,20 @@ select t.assert((select count(*) from public.profiles) = 4,
   'manager sees themselves and the three people at their own site');
 select t.assert((select count(*) from public.profiles where home_site_id = '22222222-2222-4222-8222-222222222222') = 0,
   'manager cannot see people at another site');
+select t.assert((select count(*) from public.attendance) = 3,
+  'manager sees attendance at their own site');
+select t.assert((select count(*) from public.attendance where site_id = '22222222-2222-4222-8222-222222222222') = 0,
+  'manager cannot see attendance at another site');
+select t.assert((select count(*) from public.attendance_hours) = 3,
+  'manager attendance-hours view follows the same site scope');
+select t.assert((select count(*) from public.alerts) = 1,
+  'manager sees alerts at their own site');
+select t.assert((select count(*) from public.alerts where site_id = '22222222-2222-4222-8222-222222222222') = 0,
+  'manager cannot see alerts at another site');
+select t.raises(format($q$select public.acknowledge_alert(%L)$q$, :'al1'), '42501');
+select t.assert((select count(*) from public.leave_requests) = 0,
+  'manager cannot read leave requests');
+select t.raises(format($q$select public.review_leave_request(%L, 'approved')$q$, :'r2'), '42501');
 select t.assert(t.affected($$update public.sites set radius_m = 5000
                              where id = '11111111-1111-4111-8111-111111111111'$$) = 0,
   'manager cannot edit site rules');
@@ -461,6 +475,10 @@ select t.raises($$insert into public.tasks (site_id, assigned_to, created_by, ti
 select public.create_task('00000000-0000-4000-8000-0000000000e1', 'Inspect server room', 'high', now() + interval '4 hours');
 select t.assert((select count(*) from public.tasks where title = 'Inspect server room' and status = 'pending') = 1,
   'manager creates a task for an employee at their site');
+select t.assert((select (public.set_task_status(
+  (select id from public.tasks where title = 'Inspect server room'), 'in_progress'
+)).status) = 'in_progress',
+  'manager can update a task at their site');
 select t.raises($$select public.create_task('00000000-0000-4000-8000-0000000000e3', 'Wrong site', 'low')$$, '42501');
 select t.raises($$select public.create_task('00000000-0000-4000-8000-0000000000e1', '   ', 'low')$$, '22023');
 select t.raises($$select public.create_task('00000000-0000-4000-8000-0000000000a1', 'Admin is not an employee', 'low')$$, '42501');
@@ -479,6 +497,10 @@ select t.raises($$select public.set_task_status((select id from public.tasks lim
 
 :as_mgr2
 select t.assert((select count(*) from public.tasks) = 0, 'manager of another site cannot see the task');
+select t.assert((select count(*) from public.attendance) = 1,
+  'manager sees attendance only at their own site');
+select t.assert((select count(*) from public.alerts) = 0,
+  'manager cannot see another site''s alerts');
 
 -- incidents
 :as_emp1
@@ -499,19 +521,22 @@ select t.assert((select count(*) from public.incidents) = 0, 'employees only see
 select t.assert((select count(*) from public.incidents) = 1, 'manager sees incidents at their site');
 select t.assert((select (public.set_incident_status((select id from public.incidents limit 1), 'investigating')).status) = 'investigating',
   'manager updates an incident status');
+select public.report_incident('hazard', 'medium', 'Loose railing near entrance', 'Entrance');
+select t.assert((select count(*) from public.incidents) = 2,
+  'manager can report an incident at their site');
 
 :as_mgr2
 select t.assert((select count(*) from public.incidents) = 0, 'manager of another site cannot see the incident');
 select t.raises($$select public.set_incident_status((select id from public.incidents limit 1), 'resolved')$$, 'P0002');
 
 :as_admin1
-select t.assert((select count(*) from public.tasks) = 1 and (select count(*) from public.incidents) = 1,
+select t.assert((select count(*) from public.tasks) = 1 and (select count(*) from public.incidents) = 2,
   'scoped administrator can read tasks and incidents');
 select t.assert(t.affected($$update public.sites set work_start = '07:30', authorised_network = 'Office Wi-Fi'
                              where id = '11111111-1111-4111-8111-111111111111'$$) = 1,
   'scoped administrator can edit site working rules');
 select t.assert((select count(*) from public.audit_log where action in
-  ('task.created', 'task.status_changed', 'incident.reported', 'incident.status_changed')) = 5,
+  ('task.created', 'task.status_changed', 'incident.reported', 'incident.status_changed')) = 7,
   'task and incident actions are audited');
 
 :as_admin2
@@ -567,6 +592,26 @@ select t.assert((select count(*) from public.site_messages) = 2, 'scoped adminis
 :as_admin2
 select t.assert((select count(*) from public.site_messages) = 0, 'administrator of another site cannot read them');
 
+:as_mgr1
+select t.assert(
+  public.create_site_conversation_with_message(
+    null, 'Manager updates', 'Shift handover notes'
+  )->'conversation'->>'title' = 'Manager updates',
+  'manager creates a site thread with its first message atomically');
+select t.assert(
+  (select count(*) from public.site_conversations where title = 'Manager updates') = 1
+  and (select count(*) from public.site_messages m
+       join public.site_conversations c on c.id = m.conversation_id
+       where c.title = 'Manager updates') = 1,
+  'new manager thread and first message are both persisted');
+select t.raises($$select public.create_site_conversation_with_message(
+  '22222222-2222-4222-8222-222222222222', 'Out of scope', 'Should fail'
+)$$, '42501');
+
+:as_mgr2
+select t.assert((select count(*) from public.site_conversations where title = 'Manager updates') = 0,
+  'manager cannot see another site''s conversations');
+
 :as_super
 select t.assert((select count(*) from public.message_sender_names(array(select id from public.site_conversations))) = 0,
   'the service role (no user) is not a site member, so no names are returned');
@@ -580,6 +625,6 @@ select t.raises(format($q$insert into public.site_messages (conversation_id, sen
 :as_super
 insert into public.incidents (site_id, reported_by, category, details)
   values ('11111111-1111-4111-8111-111111111111', '00000000-0000-4000-8000-0000000000e1', 'accident', 'Minor slip near gate');
-select t.assert((select max(ref_no) from public.incidents) = 2, 'the reference number increments for each incident');
+select t.assert((select max(ref_no) from public.incidents) = 3, 'the reference number increments for each incident');
 
 select 'ALL DATABASE TESTS PASSED' as result;

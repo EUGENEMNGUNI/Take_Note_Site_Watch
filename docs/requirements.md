@@ -40,6 +40,15 @@ Authorised administrators should be able to:
 - Access authorised reports.
 - Review audit records and perform permitted administrative actions.
 
+### 3.3 Site Manager
+
+Site managers should be able to:
+- View employees, attendance, site-presence details and attendance alerts for their assigned site only.
+- Assign tasks to active employees at their site and monitor task status.
+- Review reported incidents at their site and update incident status.
+- Communicate with employees through site-scoped message threads.
+- Be prevented from accessing administrator-only functions, including leave decisions, site-rule changes, audit records and alert acknowledgement.
+
 ## 4. Functional Requirements
 
 ### FR-01: Authentication
@@ -90,6 +99,9 @@ The system may provide internal messaging for approved employee and administrato
 
 ### FR-15: Audit Logging
 The system should record relevant security-sensitive and administrative actions to support accountability and troubleshooting.
+
+### FR-16: Site Manager Workflows
+Managers must be scoped to their assigned site. They may manage site tasks and incident status and use site messaging, but must not access another site's records or administrator-only actions.
 
 ## 5. Non-Functional Requirements
 
@@ -150,6 +162,8 @@ The initial system should be tested to establish that:
 - Attendance records are associated with the correct employee.
 - Employees cannot access another employee's restricted records.
 - Administrators can access the attendance information permitted by their role.
+- Managers can access attendance, employees, alerts, tasks, incidents and messages only for their assigned site.
+- Managers cannot approve leave, change site rules, read the audit log, or acknowledge alerts.
 - Leave requests and their decisions are recorded correctly.
 - Sensitive documents are protected from unauthorised access.
 - Invalid input and failed requests are handled appropriately.

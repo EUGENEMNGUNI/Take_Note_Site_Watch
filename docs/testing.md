@@ -27,6 +27,8 @@ role (`anon` or `authenticated`) plus the caller's id in
 | Records tied to the correct employee | attendance owner assertions |
 | Employees cannot read another's records | attendance, profile, leave, document and file isolation between two employees |
 | Administrators see only what their role permits | two administrators with different site scopes |
+| Managers stay within their assigned site | manager profile, attendance, attendance-hours, alert, task and incident visibility across two sites |
+| Manager actions use the correct permissions | site task assignment, incident status changes, manager alert-acknowledgement rejection and site message access |
 | Leave requests and decisions recorded correctly | submit, approve, reviewer and time stamps, double review, self-review, cancel |
 | Sensitive documents protected | private bucket, path rules, upload only for own pending request, scoped admin reads, no changes by employees |
 | Invalid input handled | out-of-range coordinates, bad file type and size, bad dates, unknown site |
@@ -38,6 +40,9 @@ role (`anon` or `authenticated`) plus the caller's id in
   `auth` and `storage` services: the stub only mimics the parts the schema uses.
   Re-run the key isolation checks once against a real Supabase project.
 - The Next.js application: route protection, forms and error states.
+- API route behavior is not covered by automated route-level tests; the manager
+  API uses the signed-in Supabase session and RLS policies covered by the
+  database acceptance tests.
 - Concurrency under load: the unique indexes guard against duplicate open
   check-ins, but there is no parallel stress test yet.
 
