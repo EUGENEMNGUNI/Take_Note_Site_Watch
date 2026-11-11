@@ -25,6 +25,9 @@
 
 * { box-sizing: border-box; margin: 0; }
 html, body { min-height: 100%; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 body {
   background: var(--bg);
   color: var(--dark);
@@ -437,8 +440,37 @@ textarea { resize: vertical; }
 .ov-footer-links a { color: #d1d5db; font-size: 14px; font-weight: 500; }
 .ov-footer-links a:hover { color: #fff; text-decoration: none; }
 
+.si-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.si-header .si-wordmark { margin: 0; max-width: none; }
+.si-back { font-size: 14px; font-weight: 600; white-space: nowrap; }
+
+.ov [id] { scroll-margin-top: 84px; }
+.ov-btn:focus-visible, .ov-nav a:focus-visible, .ov-footer-links a:focus-visible { outline: 2px solid var(--si-red); outline-offset: 3px; }
+.ov-hero .ov-btn:focus-visible { outline-color: #fff; }
+
+.ov-menu { display: none; position: relative; }
+.ov-menu-toggle { background: transparent; border: 1px solid var(--si-line); border-radius: 6px; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: var(--si-ink); }
+.ov-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  min-width: 190px;
+  background: #fff;
+  border: 1px solid var(--si-line);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(17, 24, 39, 0.18);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.ov-menu-panel a { color: var(--si-ink); font-weight: 500; font-size: 15px; padding: 10px 12px; border-radius: 6px; }
+.ov-menu-panel a:hover { background: var(--si-surface); text-decoration: none; }
+
 @media (max-width: 900px) {
   .ov-nav { display: none; }
+  .ov-menu { display: block; }
+  .ov-header-cta { margin-left: auto; }
+  .ov-header-inner { gap: 12px; }
   .ov-header-inner { padding: 12px 20px; }
   .ov-hero { padding: 40px 20px 48px; }
   .ov .si-hero-inner { grid-template-columns: 1fr; gap: 36px; }

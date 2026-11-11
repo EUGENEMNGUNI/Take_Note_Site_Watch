@@ -125,6 +125,7 @@ export default function SignInPage() {
           <b>Take Note</b>
           <span>Site Watch</span>
         </Link>
+        <Link href="/" className="si-back">Back to overview</Link>
       </header>
 
       <main className="si-hero">
@@ -163,6 +164,7 @@ export default function SignInPage() {
                     type="button"
                     className="si-toggle"
                     aria-pressed={showPassword}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                     onClick={() => setShowPassword((value) => !value)}
                   >
                     {showPassword ? "Hide" : "Show"}

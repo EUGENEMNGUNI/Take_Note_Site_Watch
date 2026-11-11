@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { OverviewMenu } from "@/components/ov-menu";
+
 const FEATURES = [
   {
     title: "Verified check-in",
@@ -110,7 +112,8 @@ export default function Overview() {
             <Link href="#security">Security</Link>
             <Link href="#contact">Contact</Link>
           </nav>
-          <Link href="/sign-in" className="ov-btn ov-btn-red">Sign in</Link>
+          <Link href="/sign-in" className="ov-btn ov-btn-red ov-header-cta">Sign in</Link>
+          <OverviewMenu />
         </div>
       </header>
 
