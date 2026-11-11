@@ -6,6 +6,7 @@ import {
   assertSameOrigin,
   readJsonObject,
   requireApiUser,
+  requireUuid,
 } from "@/lib/backend/http";
 
 type ConversationRow = {
@@ -63,7 +64,10 @@ export async function GET(request: Request) {
   try {
     const { supabase, profile } = await requireApiUser(["employee", "manager", "admin"]);
     const { searchParams } = new URL(request.url);
-    const conversationId = searchParams.get("conversationId");
+    const requestedConversationId = searchParams.get("conversationId");
+    const conversationId = requestedConversationId
+      ? requireUuid(requestedConversationId, "Conversation")
+      : null;
 
     if (conversationId) {
       const { data: conversation, error: conversationError } = await supabase
@@ -154,15 +158,16 @@ export async function POST(request: Request) {
     const body = await readJsonObject(request);
     const content = trimText(body.content, "Message", 1, 2000);
 
-    const siteId =
-      typeof body.siteId === "string" && body.siteId
-        ? body.siteId
-        : profile.home_site_id;
-
-    const conversationId =
-      typeof body.conversationId === "string" && body.conversationId.trim()
-        ? body.conversationId.trim()
-        : null;
+    let conversationId: string | null = null;
+    if (body.conversationId !== undefined && body.conversationId !== null) {
+      if (typeof body.conversationId !== "string") {
+        throw new ApiError("Conversation must be a valid ID.", 400);
+      }
+      const requestedConversationId = body.conversationId.trim();
+      if (requestedConversationId) {
+        conversationId = requireUuid(requestedConversationId, "Conversation");
+      }
+    }
 
     if (conversationId) {
       const { data: conversation, error: conversationError } = await supabase
@@ -195,29 +200,25 @@ export async function POST(request: Request) {
     if (profile.role === "manager" && !profile.home_site_id) {
       throw new ApiError("Your account has no home site. Contact your administrator.", 403);
     }
+    let siteId: string | null = profile.home_site_id;
+    if (body.siteId !== undefined && body.siteId !== null && body.siteId !== "") {
+      siteId = requireUuid(body.siteId, "Site");
+    }
     if (profile.role === "admin" && !siteId) {
       throw new ApiError("Choose a site before creating a message thread.", 400);
     }
 
-    const { data: conversation, error: createConversationError } = await supabase
-      .from("site_conversations")
-      .insert({
-        site_id: siteId,
-        created_by: profile.id,
-        title,
-      })
-      .select("id, site_id, title, created_by, created_at, updated_at")
-      .single();
-    if (createConversationError) throw createConversationError;
+    const { data, error: createError } = await supabase.rpc(
+      "create_site_conversation_with_message",
+      {
+        p_site_id: siteId,
+        p_title: title,
+        p_body: content,
+      },
+    );
+    if (createError) throw createError;
 
-    const { data: message, error: createMessageError } = await supabase
-      .from("site_messages")
-      .insert({ conversation_id: conversation.id, sender_id: profile.id, body: content })
-      .select("id, conversation_id, sender_id, body, created_at")
-      .single();
-    if (createMessageError) throw createMessageError;
-
-    return Response.json({ conversation, message }, { status: 201 });
+    return Response.json(data, { status: 201 });
   } catch (error) {
     return apiErrorResponse(error);
   }

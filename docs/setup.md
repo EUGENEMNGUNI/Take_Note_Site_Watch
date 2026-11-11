@@ -18,6 +18,12 @@ The migrations in `database/schema/` are applied **in filename order**:
 0004_attendance.sql  attendance, check-in/out, alerts, hours view
 0005_leave.sql       leave requests, documents, review
 0006_storage.sql     private document bucket and its policies
+0007_manager_role.sql adds the manager role
+0008_tasks_incidents_site_rules.sql manager scope, tasks, incidents and site rules
+0009_messaging.sql   site conversations and messages
+0010_messaging_fixes.sql message activity timestamps and sender names
+0011_incident_reference.sql sequential incident reference numbers
+0012_atomic_site_conversation.sql create a conversation and first message together
 ```
 
 Either paste them into the Supabase SQL Editor one at a time, or run them with
@@ -112,7 +118,7 @@ and leave decisions go through the database functions described in
 
 | Method | Endpoint | Access | Purpose |
 | --- | --- | --- | --- |
-| `GET` | `/api/attendance` | Employee or administrator | Return scoped attendance history, active sites, and the caller profile |
+| `GET` | `/api/attendance` | Employee, manager or administrator | Return attendance visible to the caller, active sites, and the caller profile |
 | `POST` | `/api/attendance` | Employee | Check in with a site ID and optional coordinates / request ID |
 | `PATCH` | `/api/attendance` | Employee | Check out with optional coordinates / request ID |
 | `GET` | `/api/leave` | Employee | List the caller's leave requests |
@@ -127,13 +133,16 @@ and leave decisions go through the database functions described in
 | `POST` | `/api/incidents` | Employee or manager | Report an incident (`category`, `priority`, `details`, optional `location`) |
 | `PATCH` | `/api/incidents` | Manager or administrator | Change an incident's status (`incidentId`, `status`) |
 | `GET` | `/api/manager/overview` | Manager | Site, staff, today's attendance and open alerts for the manager's site |
+| `GET` | `/api/messages` | Employee, manager or administrator | List site conversations and messages visible to the caller; optional `conversationId` loads one thread |
+| `POST` | `/api/messages` | Employee, manager or administrator | Create a site conversation with its first message atomically or send a message to an accessible thread (`content`, optional `conversationId`, `title`, and administrator-only `siteId`) |
 | `GET` | `/api/admin/leave/{requestId}/documents` | Administrator | List a request's supporting documents with 5-minute signed URLs |
 
 Mutation routes require a same-origin JSON request. They validate input and
 return an `{ "error": "..." }` response with an appropriate HTTP status on
 failure. Employees upload sick-leave documents straight to the private
-`leave-documents` bucket (Storage policies enforce ownership); the manager,
-task, and incident features are not implemented.
+`leave-documents` bucket (Storage policies enforce ownership). Manager routes
+use the signed-in user's Supabase client, and database Row Level Security plus
+database functions enforce one-site manager scope.
 
 ## Not done yet
 
@@ -142,7 +151,8 @@ refresh and redirect of signed-out visitors (`front-end/proxy.ts`), employee
 attendance, leave with document upload, tasks and incident reports;
 administrator leave review, site/staff creation (employees or site managers),
 site rules (radius, working hours, authorised network), live attendance counts
-and activity history; and the site manager dashboard, tasks and incidents.
+and activity history; and the site manager dashboard, attendance view, tasks,
+incidents, site messaging and message threads.
 
 Notes and gaps:
 
@@ -153,5 +163,5 @@ Notes and gaps:
 - The authorised network and working hours are stored and shown, but check-in
   does not enforce them yet; site presence is still verified by the location
   radius only (open decision, `requirements.md` §9).
-- Internal messaging (FR-14) is optional in the requirements and not built.
-  Reports and late/no-check-in alerts are also not built.
+- Reports and late/no-check-in alerts are not built; only outside-radius alerts
+  are generated. Managers can view open alerts but cannot acknowledge them.

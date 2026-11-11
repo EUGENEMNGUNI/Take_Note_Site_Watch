@@ -29,5 +29,8 @@ Foundation in place: schema, access control, check-in/out and leave functions,
 audit log, private document storage, Supabase clients, seed data and tests.
 Sign-in, password reset, session refresh, attendance, leave with document
 upload, tasks, incident reports, site rules, and the employee, site manager and
-administrator dashboards are implemented. Still to build: messaging, reports,
-late/no-check-in alerts, and enforcing working hours and network at check-in. Open decisions are listed in `docs/requirements.md` §9.
+administrator dashboards are implemented, including site-scoped manager
+attendance, task, incident and messaging workflows. Still to build: reports,
+late/no-check-in alerts, alert acknowledgement for managers, and enforcement
+of working hours and network at check-in. Open decisions are listed in
+`docs/requirements.md` §9.

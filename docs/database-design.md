@@ -20,8 +20,7 @@ schema except the private document bucket in Supabase Storage.
 
 ## Roles and scope
 
-Only two roles exist, matching `requirements.md` §3: `employee` and `admin`. A
-`manager` role is **not** created (see Open decisions).
+The `user_role` enum contains `employee`, `manager` and `admin`.
 
 Administrators are scoped by site through `admin_site_access`:
 
@@ -31,8 +30,13 @@ Administrators are scoped by site through `admin_site_access`:
 | Profiles, leave requests, documents | the employee's **home site** is in their scope |
 | Audit log | always (all administrators see the whole log) |
 
-Employees see only their own rows. An employee's role, status and home site
-cannot be changed by the employee; only their own `full_name` is editable.
+Managers have one `home_site_id`. They can read that site's profiles, attendance,
+alerts, tasks, incidents and message threads, but cannot administer site rules,
+approve leave, read the audit log, or acknowledge alerts. Employees see their
+own attendance and leave records; they can read their own tasks and reported
+incidents, and site messages for their home site. An employee's role, status
+and home site cannot be changed by the employee; only their own `full_name` is
+editable.
 
 ## Tables
 
@@ -42,10 +46,13 @@ cannot be changed by the employee; only their own `full_name` is editable.
 | `sites` | Work sites: coordinates, radius in metres, `enforce_radius`, active flag. Sites are deactivated, never deleted. |
 | `admin_site_access` | Which sites each administrator may see. Managed by the service role. |
 | `attendance` | Check-in/check-out pairs with server timestamps, presence status and the coordinates supplied. |
-| `alerts` | Attendance exceptions for administrators. Currently raised: `outside_radius`. |
+| `alerts` | Attendance exceptions visible to administrators in scope and managers at their site. Currently raised: `outside_radius`. |
 | `leave_requests` | Sick-leave requests and their decision (status, reviewer, time, note). |
 | `leave_documents` | Metadata for uploaded files; the files themselves live in Storage. |
 | `audit_log` | Append-only record of security-sensitive and administrative actions. |
+| `tasks` | Site-scoped work assigned by a manager to an active employee. |
+| `incidents` | Site-scoped hazard or accident reports with sequential reference numbers and status. |
+| `site_conversations`, `site_messages` | Site-scoped internal message threads and messages. |
 
 View: `attendance_hours` (per record: hours worked, open flag). It uses
 `security_invoker`, so it follows the caller's RLS.
@@ -58,9 +65,14 @@ View: `attendance_hours` (per record: hours worked, open flag). It uses
 | `check_out(lat, lng, request_id)` | employee | Closes the caller's open record; error if none. |
 | `cancel_leave_request(id)` | employee | Cancels their own pending request. |
 | `review_leave_request(id, decision, note)` | admin | Approves or rejects a pending request in scope; cannot review one's own. |
-| `acknowledge_alert(id, status)` | admin | Marks an in-scope alert acknowledged or resolved. |
+| `acknowledge_alert(id, status)` | admin | Marks an in-scope alert acknowledged or resolved. Managers can read site alerts but cannot acknowledge them. |
 | `admin_set_user_role(user, role)` | admin | Changes the role of an in-scope user; not one's own. |
 | `admin_set_user_active(user, active)` | admin | Activates or deactivates an in-scope user; not one's own. |
+| `create_task(assignee, title, priority, due_at)` | manager | Creates a task for an active employee at the manager's site. |
+| `set_task_status(task, status)` | assignee or site manager | Updates a task and records completion time when marked done. |
+| `report_incident(category, priority, details, location)` | employee or manager | Reports an incident at the caller's home site. |
+| `set_incident_status(incident, status)` | site manager or in-scope admin | Updates an incident at an accessible site. |
+| `create_site_conversation_with_message(site, title, body)` | employee, site manager or in-scope admin | Creates a scoped conversation and its first message atomically. |
 
 Errors use SQLSTATE codes the application can map to messages: `28000` not
 signed in, `42501` not allowed, `P0002` not found, `22023` invalid input,
@@ -94,13 +106,15 @@ These come from `requirements.md` §9 and are deliberately not hard-coded.
 - **Site-presence method.** The foundation supports a location radius with
   `sites.enforce_radius` off by default (flag, do not block). A network-based
   method would need an extra column or table.
-- **Manager role, tasks, incidents, messaging, map.** Not modelled. Add them
-  only once approved. `alter type public.user_role add value 'manager'` is
-  enough to introduce the role itself.
+- **Manager scope.** Managers are scoped to one home site. Changing that model
+  to support multiple sites would require changes to the profile model and
+  manager access helper functions.
 - **Working-hours rules.** `attendance_hours` is raw duration: no break
   deduction, overtime split or missed-check-out handling.
 - **Alert rules and channels.** Only `outside_radius` is generated. The enum
   already lists `late_arrival`, `no_check_in` and `missed_check_out`.
+- **Manager alert handling.** Managers can view site alerts but only
+  administrators can acknowledge or resolve them.
 - **Retention.** Foreign keys from attendance and leave to `profiles` use
   `on delete restrict`, so a user with records is deactivated, not deleted.
   Deleting old attendance, location data or documents needs an audited

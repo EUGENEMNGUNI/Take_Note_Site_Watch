@@ -14,14 +14,16 @@ well as the application. It also means a bug in the UI cannot expose data.
 **Consequence.** New tables must enable RLS and revoke default grants in their
 migration; the tests should gain a case for each.
 
-## ADR-002: Two roles, site-scoped administrators
+## ADR-002: Site-scoped managers and administrators
 
-**Decision.** `employee` and `admin` only. Administrators see data only for the
-sites in `admin_site_access`.
-**Why.** The requirements list these two roles and say administrators work
-"within their authorised scope". The manager role from the mockups is not in the
-requirements.
-**Consequence.** Adding a manager role later is an enum value plus new policies.
+**Decision.** Employees, managers and administrators have separate permissions.
+Managers are assigned one `home_site_id` and can access only that site's
+manager workflows; administrators see data only for sites in
+`admin_site_access`.
+**Why.** Site managers need to monitor attendance and coordinate staff without
+receiving administrator privileges.
+**Consequence.** Manager scope is enforced in database policies and functions,
+not inferred from the dashboard. Manager accounts require a home site.
 
 ## ADR-003: Attendance is written by functions, with the server clock
 

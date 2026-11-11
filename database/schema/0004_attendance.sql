@@ -6,6 +6,9 @@
 --     and check_out(), which use the server clock (never the client's) and
 --     enforce the business rules below.
 --   * One open check-in per employee (partial unique index).
+
+
+
 --   * Retries are safe: an optional client-generated request id makes
 --     check_in() / check_out() idempotent.
 --   * Closed records and the identifying columns of open records are
