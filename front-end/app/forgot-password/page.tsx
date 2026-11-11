@@ -139,7 +139,7 @@ export default function ForgotPasswordPage() {
             </button>
 
             {message ? <div className={`message-box ${messageType}`}>{message}</div> : null}
-            <Link href="/" className="back-login">Back to sign in</Link>
+            <Link href="/sign-in" className="back-login">Back to sign in</Link>
           </div>
         )}
 
@@ -161,7 +161,7 @@ export default function ForgotPasswordPage() {
             </button>
 
             {message ? <div className={`message-box ${messageType}`}>{message}</div> : null}
-            <Link href="/" className="back-login">Back to sign in</Link>
+            <Link href="/sign-in" className="back-login">Back to sign in</Link>
           </div>
         )}
 
@@ -185,7 +185,7 @@ export default function ForgotPasswordPage() {
             </button>
 
             {message ? <div className={`message-box ${messageType}`}>{message}</div> : null}
-            <Link href="/" className="back-login">Back to sign in</Link>
+            <Link href="/sign-in" className="back-login">Back to sign in</Link>
           </div>
         )}
 
@@ -197,7 +197,7 @@ export default function ForgotPasswordPage() {
               <p>Your password was changed successfully. You can now sign in with your new credentials.</p>
             </div>
 
-            <Link href="/" className="btn" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "100%", marginTop: 18 }}>
+            <Link href="/sign-in" className="btn" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "100%", marginTop: 18 }}>
               Go to sign in
             </Link>
           </div>

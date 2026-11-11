@@ -28,7 +28,7 @@ const STREET_TILES = {
 };
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>\"']/g, (char) => {
+  return value.replace(/[&<>"']/g, (char) => {
     switch (char) {
       case "&": return "&amp;";
       case "<": return "&lt;";
@@ -48,6 +48,7 @@ export function LiveMap({ site, points }: { site: LiveMapSite; points: LiveMapPo
   const fittedForRef = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
 
+  // Create the map once.
   useEffect(() => {
     let cancelled = false;
     void import("leaflet").then((L) => {
@@ -69,8 +70,11 @@ export function LiveMap({ site, points }: { site: LiveMapSite; points: LiveMapPo
       fittedForRef.current = null;
       setReady(false);
     };
+    // The map is created once; site and points are applied by the effects below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Add the street tiles once the map exists.
   useEffect(() => {
     const L = leafletRef.current;
     const map = mapRef.current;
@@ -83,6 +87,7 @@ export function LiveMap({ site, points }: { site: LiveMapSite; points: LiveMapPo
     tilesRef.current.bringToBack();
   }, [ready]);
 
+  // Draw the site radius and check-in positions.
   useEffect(() => {
     const L = leafletRef.current;
     const map = mapRef.current;
@@ -130,6 +135,7 @@ export function LiveMap({ site, points }: { site: LiveMapSite; points: LiveMapPo
       bounds.extend(position);
     }
 
+    // Fit once per site so a refresh does not undo the viewer's own zoom and pan.
     const siteKey = `${site.latitude},${site.longitude},${site.radius_m}`;
     if (fittedForRef.current !== siteKey) {
       map.invalidateSize();
